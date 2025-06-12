@@ -13,6 +13,8 @@ jobs:
         php-version: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -46,6 +48,8 @@ jobs:
         php-version: ['8.2', '8.3', '8.4']
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -80,6 +84,8 @@ jobs:
         arch: ['x64', 'x86']
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -115,6 +121,10 @@ jobs:
     needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      
       - name: Download all artifacts
         uses: actions/download-artifact@v3
         with:
@@ -139,6 +149,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
