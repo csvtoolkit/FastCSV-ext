@@ -84,64 +84,65 @@ jobs:
           overwrite: true
           include-hidden-files: false
           
-  build-windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        php-version: ['8.2', '8.3', '8.4']
-        arch: ['x64', 'x86']
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php-version }}
-          arch: ${{ matrix.arch }}
-          extensions: none
-          tools: phpize
-          
-      - name: Setup Visual Studio environment
-        uses: microsoft/setup-msbuild@v1.1
-        
-      - name: Add PHP tools to PATH
-        shell: pwsh
-        run: |
-          $phpDir = (Get-Command php).Path | Split-Path -Parent
-          $devDir = Join-Path $phpDir "dev"
-          echo "$devDir" | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "$phpDir" | Out-File -FilePath $env:GITHUB_PATH -Append
-          
-      - name: Build extension
-        shell: cmd
-        run: |
-          cd %GITHUB_WORKSPACE%
-          phpize
-          configure --enable-fastcsv
-          nmake
-          
-      - name: Create dist directory
-        run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
-        
-      - name: Copy extension
-        shell: pwsh
-        run: |
-          Copy-Item "Release_TS\php_fastcsv.dll" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
-          
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}
-          path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
-          if-no-files-found: warn
-          compression-level: 6
-          overwrite: true
-          include-hidden-files: false
+# Temporarily disabled Windows build due to environment issues
+#  build-windows:
+#    runs-on: windows-latest
+#    strategy:
+#      matrix:
+#        php-version: ['8.2', '8.3', '8.4']
+#        arch: ['x64', 'x86']
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          submodules: true
+#          
+#      - name: Setup PHP
+#        uses: shivammathur/setup-php@v2
+#        with:
+#          php-version: ${{ matrix.php-version }}
+#          arch: ${{ matrix.arch }}
+#          extensions: none
+#          tools: phpize
+#          
+#      - name: Setup Visual Studio environment
+#        uses: microsoft/setup-msbuild@v1.1
+#        
+#      - name: Add PHP tools to PATH
+#        shell: pwsh
+#        run: |
+#          $phpDir = (Get-Command php).Path | Split-Path -Parent
+#          $devDir = Join-Path $phpDir "dev"
+#          echo "$devDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+#          echo "$phpDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+#          
+#      - name: Build extension
+#        shell: cmd
+#        run: |
+#          cd %GITHUB_WORKSPACE%
+#          phpize
+#          configure --enable-fastcsv
+#          nmake
+#          
+#      - name: Create dist directory
+#        run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
+#        
+#      - name: Copy extension
+#        shell: pwsh
+#        run: |
+#          Copy-Item "Release_TS\php_fastcsv.dll" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
+#          
+#      - name: Upload artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}
+#          path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
+#          if-no-files-found: warn
+#          compression-level: 6
+#          overwrite: true
+#          include-hidden-files: false
 
   create-release:
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
