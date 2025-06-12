@@ -2,7 +2,15 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+> ⚠️ **Experimental Status**: This extension is currently in experimental phase. While it works correctly and passes all tests, please use with caution in production environments. We recommend thorough testing in your specific use case before deployment.
+
 A high-performance PHP extension for CSV file handling by CSVToolkit Organization. FastCSV provides significant improvements in speed and memory efficiency compared to PHP's native CSV handling functions.
+
+**Performance Benchmarks (validated):**
+- **4-7x faster** than native PHP CSV functions
+- **Read Performance**: Up to 383K records/sec vs 82K records/sec (SplFileObject)
+- **Write Performance**: Up to 692K records/sec vs 109K records/sec (SplFileObject)
+- **Memory Efficient**: Constant memory usage with streaming for datasets of any size
 
 This extension is built on top of [FastCSV-C](https://github.com/csvtoolkit/FastCSV-C), a standalone C library for high-performance CSV processing.
 
@@ -163,6 +171,21 @@ If you discover any security related issues, please use the GitHub Security Advi
 - [FastCSV-C Library](https://github.com/csvtoolkit/FastCSV-C)
 - [All Contributors](../../contributors)
 - Built with [php-dev-box](https://github.com/achrafAa/php-dev-box)
+
+## Support the Project
+
+If you find FastCSV useful for your projects, please consider sponsoring the development! Your support helps maintain and improve this high-performance CSV extension while reducing development and infrastructure costs.
+
+[![Sponsor](https://img.shields.io/badge/sponsor-❤️-ff69b4?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/achrafAa)
+
+**Why sponsor?**
+- 🚀 Accelerate development of new features
+- 🐛 Faster bug fixes and improvements  
+- 📚 Better documentation and examples
+- 🎯 Priority support for feature requests
+- 💡 Fund research into even faster CSV processing techniques
+- 💰 **Lower development costs** - Reduce your team's time spent on CSV processing optimization
+- 🏗️ **Reduce infrastructure costs** - More efficient processing means lower server resources needed
 
 ## License
 

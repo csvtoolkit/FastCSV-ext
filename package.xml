@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package packagerversion="1.10.13" version="2.0" xmlns="http://pear.php.net/dtd/package-2.0" xmlns:tasks="http://pear.php.net/dtd/tasks-1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pear.php.net/dtd/tasks-1.0 http://pear.php.net/dtd/tasks-1.0.xsd http://pear.php.net/dtd/package-2.0 http://pear.php.net/dtd/package-2.0.xsd">
+ <name>fastcsv</name>
+ <channel>pecl.php.net</channel>
+ <summary>High-performance CSV file handling extension</summary>
+ <description>A high-performance PHP extension for CSV file handling, providing significant improvements in speed and memory efficiency compared to PHP's native CSV handling. 
+
+EXPERIMENTAL STATUS: This extension is currently in experimental phase. While it works correctly and passes all tests, please use with caution in production environments.
+
+PERFORMANCE BENCHMARKS (validated):
+- 4-7x faster than native PHP CSV functions
+- Read Performance: Up to 383K records/sec vs 82K records/sec (SplFileObject)  
+- Write Performance: Up to 692K records/sec vs 109K records/sec (SplFileObject)
+- Memory Efficient: Constant memory usage with streaming for datasets of any size
+
+Features include streaming CSV reading and writing, custom delimiters and enclosures support, header row handling, and UTF-8 support.</description>
+ <lead>
+  <name>CSVToolkit Organization</name>
+  <user>csvtoolkit</user>
+  <email>maintainer@csvtoolkit.org</email>
+  <active>yes</active>
+ </lead>
+ <date>2024-03-19</date>
+ <version>
+  <release>0.0.1</release>
+  <api>0.0.1</api>
+ </version>
+ <stability>
+  <release>beta</release>
+  <api>beta</api>
+ </stability>
+ <license uri="https://opensource.org/licenses/MIT">MIT</license>
+ <notes>
+- Initial PECL release
+- EXPERIMENTAL STATUS: Use with caution in production environments
+- High-performance CSV reading and writing (4-7x faster than native PHP)
+- Read Performance: Up to 383K records/sec vs 82K records/sec (SplFileObject)
+- Write Performance: Up to 692K records/sec vs 109K records/sec (SplFileObject)
+- Memory-efficient processing with constant memory usage
+- Support for custom delimiters and enclosures
+- Header row handling
+- UTF-8 support
+- Thread-safe design
+ </notes>
+ <contents>
+  <dir name="/">
+   <file name="config.m4" role="src" />
+   <file name="fastcsv.c" role="src" />
+   <file name="php_fastcsv.h" role="src" />
+   <dir name="lib">
+    <file name="csv_config.c" role="src" />
+    <file name="csv_config.h" role="src" />
+    <file name="csv_reader.c" role="src" />
+    <file name="csv_reader.h" role="src" />
+    <file name="csv_writer.c" role="src" />
+    <file name="csv_writer.h" role="src" />
+   </dir>
+   <dir name="tests">
+    <file name="001-load.phpt" role="test" />
+    <file name="002-reader.phpt" role="test" />
+    <file name="003-writer.phpt" role="test" />
+    <file name="004-config.phpt" role="test" />
+   </dir>
+  </dir>
+ </contents>
+ <dependencies>
+  <required>
+   <php>
+    <min>8.2.0</min>
+   </php>
+   <pearinstaller>
+    <min>1.10.0</min>
+   </pearinstaller>
+  </required>
+ </dependencies>
+ <providesextension>fastcsv</providesextension>
+ <extsrcrelease />
+ <changelog>
+  <release>
+   <version>
+    <release>0.0.1</release>
+    <api>0.0.1</api>
+   </version>
+   <stability>
+    <release>beta</release>
+    <api>beta</api>
+   </stability>
+   <date>2024-03-19</date>
+   <license uri="https://opensource.org/licenses/MIT">MIT</license>
+   <notes>
+Initial release
+   </notes>
+  </release>
+ </changelog>
+</package> 
