@@ -2,8 +2,8 @@ name: Release Build
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - '**'
 
 jobs:
   build-linux:
@@ -34,7 +34,7 @@ jobs:
           cp modules/fastcsv.so "dist/linux/php${{ matrix.php-version }}-fastcsv.so"
           
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-builds
           path: dist/linux/
@@ -67,7 +67,7 @@ jobs:
           cp modules/fastcsv.so "dist/macos/php${{ matrix.php-version }}-fastcsv.so"
           
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-builds
           path: dist/macos/
@@ -106,7 +106,7 @@ jobs:
           copy php_fastcsv.dll "dist/windows/php${{ matrix.php-version }}-fastcsv-${{ matrix.arch }}.dll"
           
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-builds
           path: dist/windows/
@@ -151,7 +151,7 @@ jobs:
           pecl package package.xml
           
       - name: Upload PECL package
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pecl-package
           path: fastcsv-*.tgz
