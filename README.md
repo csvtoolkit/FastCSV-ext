@@ -6,6 +6,8 @@ A high-performance PHP extension for CSV file handling by CSVToolkit Organizatio
 
 This extension is built on top of [FastCSV-C](https://github.com/csvtoolkit/FastCSV-C), a standalone C library for high-performance CSV processing.
 
+> **Tip**: For a unified API that automatically leverages this extension when available, check out [PHP-CSVHelper](https://github.com/csvtoolkit/PHP-CSVHelper). It provides a consistent interface that uses FastCSV for maximum performance while gracefully falling back to SplFileObject when needed.
+
 ## Features
 
 - High-performance CSV reading and writing
