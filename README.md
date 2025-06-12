@@ -1,6 +1,5 @@
 # FastCSV Extension
 
-[![PECL](https://img.shields.io/pecl/v/fastcsv.svg)](https://pecl.php.net/package/fastcsv)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A high-performance PHP extension for CSV file handling by CSVToolkit Organization. FastCSV provides significant improvements in speed and memory efficiency compared to PHP's native CSV handling functions.
@@ -15,14 +14,6 @@ This extension is built on top of [FastCSV-C](https://github.com/csvtoolkit/Fast
 - Header row handling
 - Robust error handling
 - UTF-8 support
-
-## Performance Highlights
-
-- **Reading**: Up to 2.31x faster than native PHP
-- **Writing**: Up to 1.56x faster than native PHP
-- **Memory Usage**: 
-  - Reading: 94.8% less memory (1.2KB vs 22.8KB)
-  - Writing: 99.1% less memory (80B vs 9KB)
 
 ## Requirements
 
@@ -62,12 +53,6 @@ phpdev build
 ```
 
 ## Installation
-
-### Via PECL
-
-```bash
-pecl install fastcsv
-```
 
 ### Manual Installation
 
@@ -162,20 +147,13 @@ Run the test suite:
 make test
 ```
 
-## Benchmarking
-
-Run the included benchmark script:
-```bash
-php -d extension=fastcsv.so dev/benchmark.php <input_csv_file>
-```
-
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Security
 
-If you discover any security related issues, please email security@csvtoolkit.org instead of using the issue tracker.
+If you discover any security related issues, please use the GitHub Security Advisory feature in this repository instead of using the issue tracker.
 
 ## Credits
 
