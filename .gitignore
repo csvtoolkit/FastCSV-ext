@@ -1,0 +1,61 @@
+# Build system and configuration files
+config.log
+config.status
+config.nice
+config.h
+config.h.in
+config.h.in~
+configure
+configure~
+Makefile
+Makefile.objects
+Makefile.fragments
+libtool
+autom4te.cache/
+
+# Compiled objects and libraries
+*.so
+*.la
+*.lo
+*.o
+*.a
+.libs/
+
+# Dependency files
+*.dep
+*.d
+.deps/
+
+# PHP extension build artifacts
+modules/
+build/
+run-tests.php
+
+# Test files and results
+tests/*.diff
+tests/*.exp
+tests/*.log
+tests/*.out
+tests/*.php
+tests/*.sh
+
+# Development and temporary directories
+dev/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-*
+*~
+*.swp
+*.bak
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Backup and temporary files
+*.orig
+*.tmp

@@ -1,0 +1,164 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-version: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: phpize
+          
+      - name: Build extension
+        run: |
+          phpize
+          ./configure
+          make
+          
+      - name: Create dist directory
+        run: mkdir -p dist/linux
+        
+      - name: Copy extension
+        run: |
+          cp modules/fastcsv.so "dist/linux/php${{ matrix.php-version }}-fastcsv.so"
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-builds
+          path: dist/linux/
+          
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        php-version: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: phpize
+          
+      - name: Build extension
+        run: |
+          phpize
+          ./configure
+          make
+          
+      - name: Create dist directory
+        run: mkdir -p dist/macos
+        
+      - name: Copy extension
+        run: |
+          cp modules/fastcsv.so "dist/macos/php${{ matrix.php-version }}-fastcsv.so"
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-builds
+          path: dist/macos/
+          
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        php-version: ['8.2', '8.3', '8.4']
+        arch: ['x64', 'x86']
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          arch: ${{ matrix.arch }}
+          tools: phpize
+          
+      - name: Setup Visual Studio environment
+        uses: microsoft/setup-msbuild@v1.1
+        
+      - name: Build extension
+        shell: cmd
+        run: |
+          phpize
+          configure --enable-fastcsv
+          nmake
+          
+      - name: Create dist directory
+        run: mkdir -p dist/windows
+        
+      - name: Copy extension
+        run: |
+          copy php_fastcsv.dll "dist/windows/php${{ matrix.php-version }}-fastcsv-${{ matrix.arch }}.dll"
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-builds
+          path: dist/windows/
+
+  create-release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: dist
+          
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/**/*.so
+            dist/**/*.dll
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-pecl-package:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: pecl
+          
+      - name: Create PECL package
+        run: |
+          pecl package package.xml
+          
+      - name: Upload PECL package
+        uses: actions/upload-artifact@v3
+        with:
+          name: pecl-package
+          path: fastcsv-*.tgz
+          
+      - name: Attach PECL package to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: fastcsv-*.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
