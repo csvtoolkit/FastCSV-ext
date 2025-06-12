@@ -152,44 +152,65 @@ jobs:
     steps:
       - name: Create release directories
         run: |
-          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos}
+          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,final}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist/releases/${{ github.ref_name }}
-          merge-multiple: true
-
-      - name: List downloaded files
+          
+      - name: Debug - List all downloaded artifacts
         run: |
-          echo "Current directory structure:"
-          ls -R dist/releases/${{ github.ref_name }}
+          echo "=== Full directory structure ==="
+          find dist/releases/${{ github.ref_name }} -type f
+          echo "=== End directory structure ==="
           
       - name: Prepare release files
         run: |
-          # Create a directory for final release files
-          mkdir -p dist/releases/${{ github.ref_name }}/final
+          echo "=== Starting file preparation ==="
           
-          # Find and rename Linux files
-          for file in $(find dist/releases/${{ github.ref_name }}/linux -name "*.so"); do
-            php_ver=$(basename $(dirname $file) | sed 's/php//')
-            cp "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php${php_ver}.so"
+          # Debug - Show all .so files
+          echo "Looking for .so files..."
+          find dist/releases/${{ github.ref_name }} -name "*.so"
+          
+          # Process Linux builds - artifacts are downloaded into directories named after the artifact
+          echo "=== Processing Linux builds ==="
+          for artifact_dir in dist/releases/${{ github.ref_name }}/linux-builds-php*; do
+            if [ -d "$artifact_dir" ]; then
+              php_ver=$(basename "$artifact_dir" | grep -o 'php[0-9]\.[0-9]' | sed 's/php//')
+              echo "Processing Linux artifact directory: $artifact_dir for PHP $php_ver"
+              for file in $(find "$artifact_dir" -name "*.so"); do
+                echo "Found Linux build: $file"
+                cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php${php_ver}.so"
+              done
+            fi
           done
           
-          # Find and rename macOS files
-          for file in $(find dist/releases/${{ github.ref_name }}/macos -name "*.so"); do
-            php_ver=$(basename $(dirname $file) | sed 's/php//')
-            cp "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php${php_ver}.so"
+          # Process macOS builds - artifacts are downloaded into directories named after the artifact
+          echo "=== Processing macOS builds ==="
+          for artifact_dir in dist/releases/${{ github.ref_name }}/macos-builds-php*; do
+            if [ -d "$artifact_dir" ]; then
+              php_ver=$(basename "$artifact_dir" | grep -o 'php[0-9]\.[0-9]' | sed 's/php//')
+              echo "Processing macOS artifact directory: $artifact_dir for PHP $php_ver"
+              for file in $(find "$artifact_dir" -name "*.so"); do
+                echo "Found macOS build: $file"
+                cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php${php_ver}.so"
+              done
+            fi
           done
           
-          echo "Files ready for release:"
-          ls -la dist/releases/${{ github.ref_name }}/final/
+          echo "=== Files ready for release ==="
+          ls -la dist/releases/${{ github.ref_name }}/final/ || echo "No files in final directory"
           
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: dist/releases/${{ github.ref_name }}/final/*.so
+          files: |
+            dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php*.so
+            dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php*.so
           name: Release ${{ github.ref_name }}
           body: |
             ## FastCSV Extension ${{ github.ref_name }}
@@ -235,8 +256,6 @@ jobs:
           prerelease: false
           generate_release_notes: true
           fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 # Temporarily disabled PECL package build
 #  build-pecl-package:
