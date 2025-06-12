@@ -29,17 +29,21 @@ jobs:
           make
           
       - name: Create dist directory
-        run: mkdir -p dist/linux
+        run: mkdir -p dist/releases/${{ github.ref_name }}/linux/php${{ matrix.php-version }}
         
       - name: Copy extension
         run: |
-          cp modules/fastcsv.so "dist/linux/php${{ matrix.php-version }}-fastcsv.so"
+          cp modules/fastcsv.so "dist/releases/${{ github.ref_name }}/linux/php${{ matrix.php-version }}/fastcsv.so"
           
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-builds
-          path: dist/linux/
+          name: linux-builds-php${{ matrix.php-version }}
+          path: dist/releases/${{ github.ref_name }}/linux/php${{ matrix.php-version }}
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: true
+          include-hidden-files: false
           
   build-macos:
     runs-on: macos-latest
@@ -64,17 +68,21 @@ jobs:
           make
           
       - name: Create dist directory
-        run: mkdir -p dist/macos
+        run: mkdir -p dist/releases/${{ github.ref_name }}/macos/php${{ matrix.php-version }}
         
       - name: Copy extension
         run: |
-          cp modules/fastcsv.so "dist/macos/php${{ matrix.php-version }}-fastcsv.so"
+          cp modules/fastcsv.so "dist/releases/${{ github.ref_name }}/macos/php${{ matrix.php-version }}/fastcsv.so"
           
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-builds
-          path: dist/macos/
+          name: macos-builds-php${{ matrix.php-version }}
+          path: dist/releases/${{ github.ref_name }}/macos/php${{ matrix.php-version }}
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: true
+          include-hidden-files: false
           
   build-windows:
     runs-on: windows-latest
@@ -105,38 +113,36 @@ jobs:
           nmake
           
       - name: Create dist directory
-        run: mkdir -p dist/windows
+        run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
         
       - name: Copy extension
         run: |
-          copy php_fastcsv.dll "dist/windows/php${{ matrix.php-version }}-fastcsv-${{ matrix.arch }}.dll"
+          copy php_fastcsv.dll "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
           
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-builds
-          path: dist/windows/
+          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}
+          path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: true
+          include-hidden-files: false
 
   create-release:
     needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          path: dist
+          path: dist/releases/${{ github.ref_name }}
           
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            dist/**/*.so
-            dist/**/*.dll
+          files: dist/releases/${{ github.ref_name }}/**/*
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
@@ -144,33 +150,45 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-pecl-package:
-    needs: create-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          tools: pecl
-          
-      - name: Create PECL package
-        run: |
-          pecl package package.xml
-          
-      - name: Upload PECL package
-        uses: actions/upload-artifact@v4
-        with:
-          name: pecl-package
-          path: fastcsv-*.tgz
-          
-      - name: Attach PECL package to release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: fastcsv-*.tgz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+# Temporarily disabled PECL package build
+#  build-pecl-package:
+#    needs: create-release
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          submodules: true
+#          
+#      - name: Setup PHP
+#        uses: shivammathur/setup-php@v2
+#        with:
+#          php-version: '8.2'
+#          tools: pecl
+#          
+#      - name: Create PECL package
+#        run: |
+#          pecl package package.xml
+#          
+#      - name: Create dist directory
+#        run: mkdir -p dist/releases/${{ github.ref_name }}/pecl
+#          
+#      - name: Copy PECL package
+#        run: |
+#          cp fastcsv-*.tgz dist/releases/${{ github.ref_name }}/pecl/
+#          
+#      - name: Upload PECL package
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: pecl-package-${{ github.sha }}
+#          path: dist/releases/${{ github.ref_name }}/pecl
+#          if-no-files-found: warn
+#          compression-level: 6
+#          overwrite: true
+#          include-hidden-files: false
+#          
+#      - name: Attach PECL package to release
+#        uses: softprops/action-gh-release@v1
+#        with:
+#          files: dist/releases/${{ github.ref_name }}/pecl/*
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
