@@ -152,8 +152,7 @@ jobs:
     steps:
       - name: Create release directories
         run: |
-          mkdir -p dist/releases/${{ github.ref_name }}/linux
-          mkdir -p dist/releases/${{ github.ref_name }}/macos
+          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -161,24 +160,77 @@ jobs:
           path: dist/releases/${{ github.ref_name }}
           merge-multiple: true
 
-      - name: List files
+      - name: List downloaded files
         run: |
           echo "Current directory structure:"
-          ls -R dist/releases/${{ github.ref_name }} || echo "No files found in release directory"
+          ls -R dist/releases/${{ github.ref_name }}
           
       - name: Prepare release files
         run: |
-          # Find all .so files and copy them to their respective directories
-          find dist/releases/${{ github.ref_name }} -name "*.so" -exec cp {} dist/releases/${{ github.ref_name }} \;
+          # Create a directory for final release files
+          mkdir -p dist/releases/${{ github.ref_name }}/final
+          
+          # Find and rename Linux files
+          for file in $(find dist/releases/${{ github.ref_name }}/linux -name "*.so"); do
+            php_ver=$(basename $(dirname $file) | sed 's/php//')
+            cp "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php${php_ver}.so"
+          done
+          
+          # Find and rename macOS files
+          for file in $(find dist/releases/${{ github.ref_name }}/macos -name "*.so"); do
+            php_ver=$(basename $(dirname $file) | sed 's/php//')
+            cp "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php${php_ver}.so"
+          done
+          
           echo "Files ready for release:"
-          ls -la dist/releases/${{ github.ref_name }}/*.so || echo "No .so files found"
+          ls -la dist/releases/${{ github.ref_name }}/final/
           
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/releases/${{ github.ref_name }}/*.so
+          files: dist/releases/${{ github.ref_name }}/final/*.so
           name: Release ${{ github.ref_name }}
+          body: |
+            ## FastCSV Extension ${{ github.ref_name }}
+            
+            ### Available Builds:
+            
+            #### Linux:
+            - PHP 8.2: `fastcsv-linux-php8.2.so`
+            - PHP 8.3: `fastcsv-linux-php8.3.so`
+            - PHP 8.4: `fastcsv-linux-php8.4.so`
+            
+            #### macOS:
+            - PHP 8.2: `fastcsv-macos-php8.2.so`
+            - PHP 8.3: `fastcsv-macos-php8.3.so`
+            - PHP 8.4: `fastcsv-macos-php8.4.so`
+            
+            ### Installation
+            1. Download the appropriate file for your platform and PHP version
+            2. Rename the downloaded file to `fastcsv.so`
+            3. Copy the renamed file to your PHP extensions directory:
+               ```bash
+               # Find your PHP extension directory
+               php -i | grep extension_dir
+               
+               # Copy and rename in one command (example for Linux PHP 8.2)
+               cp fastcsv-linux-php8.2.so /path/to/extension_dir/fastcsv.so
+               ```
+            4. Add to your php.ini:
+               ```ini
+               extension=fastcsv.so
+               ```
+            5. Restart your PHP service/server
+            
+            ### Verify Installation
+            ```bash
+            # Check if the extension is loaded
+            php -m | grep fastcsv
+            
+            # Or check via PHP
+            php -r "echo extension_loaded('fastcsv') ? 'FastCSV is installed!' : 'FastCSV is not installed';"
+            ```
           draft: false
           prerelease: false
           generate_release_notes: true
