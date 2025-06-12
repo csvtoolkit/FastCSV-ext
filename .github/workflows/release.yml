@@ -2,8 +2,8 @@ name: Release Build
 
 on:
   push:
-    branches:
-      - '**'
+    tags:
+      - 'v*.*.*'
 
 jobs:
   build-linux:
