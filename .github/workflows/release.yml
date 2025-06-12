@@ -150,20 +150,39 @@ jobs:
     needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
+      - name: Create release directories
+        run: |
+          mkdir -p dist/releases/${{ github.ref_name }}/linux
+          mkdir -p dist/releases/${{ github.ref_name }}/macos
+          
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist/releases/${{ github.ref_name }}
+          merge-multiple: true
+
+      - name: List files
+        run: |
+          echo "Current directory structure:"
+          ls -R dist/releases/${{ github.ref_name }} || echo "No files found in release directory"
+          
+      - name: Prepare release files
+        run: |
+          # Find all .so files and copy them to their respective directories
+          find dist/releases/${{ github.ref_name }} -name "*.so" -exec cp {} dist/releases/${{ github.ref_name }} \;
+          echo "Files ready for release:"
+          ls -la dist/releases/${{ github.ref_name }}/*.so || echo "No .so files found"
           
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/releases/${{ github.ref_name }}/**/*
+          files: dist/releases/${{ github.ref_name }}/*.so
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
