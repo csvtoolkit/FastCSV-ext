@@ -11,6 +11,19 @@ permissions:
   issues: write
 
 jobs:
+  get-extension-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.extension-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Get the extension matrix
+        id: extension-matrix
+        uses: php/php-windows-builder/extension-matrix@v1
+        with:
+          php-version-list: '8.2, 8.3, 8.4'
+
   build-linux:
     runs-on: ubuntu-latest
     strategy:
@@ -90,11 +103,11 @@ jobs:
           include-hidden-files: false
           
   build-windows:
-    runs-on: windows-latest
+    needs: get-extension-matrix
+    runs-on: ${{ matrix.os }}
     strategy:
-      matrix:
-        php-version: ['8.2', '8.3', '8.4']
-        arch: ['x64']
+      fail-fast: false
+      matrix: ${{fromJson(needs.get-extension-matrix.outputs.matrix)}}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,6 +119,7 @@ jobs:
         with:
           php-version: ${{ matrix.php-version }}
           arch: ${{ matrix.arch }}
+          ts: ${{ matrix.ts }}
           
       - name: Create dist directory
         run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
@@ -142,7 +156,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}
+          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
           path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
           if-no-files-found: warn
           compression-level: 6
