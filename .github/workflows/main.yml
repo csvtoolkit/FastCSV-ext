@@ -20,6 +20,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Initialize submodules
+        run: |
+          git submodule update --init --recursive
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -30,6 +36,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential
+
+      - name: Verify submodule files
+        run: |
+          echo "Checking if lib directory and files exist:"
+          ls -la lib/
+          echo "Checking specific source files:"
+          test -f "lib/arena.c" && echo "arena.c exists" || echo "arena.c missing"
+          test -f "lib/csv_config.c" && echo "csv_config.c exists" || echo "csv_config.c missing"
+          test -f "lib/csv_reader.c" && echo "csv_reader.c exists" || echo "csv_reader.c missing"
+          test -f "lib/csv_writer.c" && echo "csv_writer.c exists" || echo "csv_writer.c missing"
+          test -f "lib/csv_parser.c" && echo "csv_parser.c exists" || echo "csv_parser.c missing"
+          test -f "lib/csv_utils.c" && echo "csv_utils.c exists" || echo "csv_utils.c missing"
 
       - name: Validate package.xml if it exists
         run: |
@@ -76,6 +94,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Initialize submodules
+        run: |
+          git submodule update --init --recursive
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -86,6 +110,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential
+
+      - name: Verify submodule files
+        run: |
+          echo "Checking if lib directory and files exist:"
+          ls -la lib/
+          echo "Checking specific source files:"
+          test -f "lib/arena.c" && echo "arena.c exists" || echo "arena.c missing"
+          test -f "lib/csv_config.c" && echo "csv_config.c exists" || echo "csv_config.c missing"
+          test -f "lib/csv_reader.c" && echo "csv_reader.c exists" || echo "csv_reader.c missing"
+          test -f "lib/csv_writer.c" && echo "csv_writer.c exists" || echo "csv_writer.c missing"
+          test -f "lib/csv_parser.c" && echo "csv_parser.c exists" || echo "csv_parser.c missing"
+          test -f "lib/csv_utils.c" && echo "csv_utils.c exists" || echo "csv_utils.c missing"
 
       - name: Validate package.xml if it exists
         run: |
