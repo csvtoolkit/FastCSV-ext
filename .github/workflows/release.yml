@@ -203,11 +203,9 @@ jobs:
         run: |
           echo "=== Starting file preparation ==="
           
-          # Debug - Show all .so and .dll files
           echo "Looking for .so and .dll files..."
           find dist/releases/${{ github.ref_name }} -name "*.so" -o -name "*.dll"
           
-          # Process Linux builds
           echo "=== Processing Linux builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/linux-builds-php*; do
             if [ -d "$artifact_dir" ]; then
@@ -220,7 +218,6 @@ jobs:
             fi
           done
           
-          # Process macOS builds
           echo "=== Processing macOS builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/macos-builds-php*; do
             if [ -d "$artifact_dir" ]; then
@@ -233,7 +230,6 @@ jobs:
             fi
           done
 
-          # Process Windows builds
           echo "=== Processing Windows builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/windows-builds-php*; do
             if [ -d "$artifact_dir" ]; then
@@ -312,47 +308,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          fail_on_unmatched_files: false
-
-# Temporarily disabled PECL package build
-#  build-pecl-package:
-#    needs: create-release
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#        with:
-#          submodules: true
-#          
-#      - name: Setup PHP
-#        uses: shivammathur/setup-php@v2
-#        with:
-#          php-version: '8.2'
-#          tools: pecl
-#          
-#      - name: Create PECL package
-#        run: |
-#          pecl package package.xml
-#          
-#      - name: Create dist directory
-#        run: mkdir -p dist/releases/${{ github.ref_name }}/pecl
-#          
-#      - name: Copy PECL package
-#        run: |
-#          cp fastcsv-*.tgz dist/releases/${{ github.ref_name }}/pecl/
-#          
-#      - name: Upload PECL package
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: pecl-package-${{ github.sha }}
-#          path: dist/releases/${{ github.ref_name }}/pecl
-#          if-no-files-found: warn
-#          compression-level: 6
-#          overwrite: true
-#          include-hidden-files: false
-#          
-#      - name: Attach PECL package to release
-#        uses: softprops/action-gh-release@v1
-#        with:
-#          files: dist/releases/${{ github.ref_name }}/pecl/*
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          fail_on_unmatched_files: false 

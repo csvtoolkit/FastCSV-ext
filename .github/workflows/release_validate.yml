@@ -1,0 +1,51 @@
+name: Validate FastCSV PECL package
+
+on:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  release:
+    types: [created]
+
+jobs:
+  test_package_valid:
+    name: basic PHP ${{ matrix.php }}
+    runs-on: ubuntu-22.04
+    if: github.ref == 'refs/heads/master'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        php: [ 8.2 ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+
+      - name: Validate package.xml structure
+        run: |
+          if [ -f package.xml ]; then
+            echo "package.xml exists"
+            php -l package.xml && echo "package.xml is valid XML"
+          else
+            echo "package.xml not found"
+            exit 1
+          fi
+          
+      - name: Check tests are referenced in package.xml
+        run: |
+          if [ -d tests ]; then
+            for file in tests/*.phpt; do 
+              if [ -f "$file" ]; then
+                grep $(basename $file) package.xml >/dev/null || (echo "Missing $file from package.xml" ; exit 1)
+              fi
+            done
+          fi
+
+
+

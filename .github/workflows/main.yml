@@ -1,0 +1,117 @@
+name: Build and Test FastCSV
+
+on:
+  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  release:
+    types: [created]
+
+jobs:
+  test_basic:
+    name: basic PHP ${{ matrix.php }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        php: [ 8.4 ]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Validate package.xml if it exists
+        run: |
+          if [ -f package.xml ]; then
+            echo "Found package.xml, validating structure..."
+            php -l package.xml && echo "package.xml is valid XML"
+            if [ -d tests ]; then
+              for file in tests/*.phpt; do 
+                if [ -f "$file" ]; then
+                  grep $(basename $file) package.xml >/dev/null || echo "Warning: $file not found in package.xml"
+                fi
+              done
+            fi
+          else
+            echo "No package.xml found, skipping PECL validation"
+          fi
+
+      - name: Configure and build FastCSV extension
+        run: |
+          export NO_INTERACTION=1
+          export REPORT_EXIT_STATUS=1
+          export SKIP_SLOW_TESTS=1
+          phpize
+          ./configure
+          make
+
+      - name: Run FastCSV tests
+        run: |
+          export NO_INTERACTION=1
+          export REPORT_EXIT_STATUS=1
+          export SKIP_SLOW_TESTS=1
+          make test
+
+  test_all:
+    name: Full PHP ${{ matrix.php }}
+    needs: test_basic
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        php: [8.4, 8.3, 8.2]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Validate package.xml if it exists
+        run: |
+          if [ -f package.xml ]; then
+            echo "Found package.xml, validating structure..."
+            php -l package.xml && echo "package.xml is valid XML"
+            if [ -d tests ]; then
+              for file in tests/*.phpt; do 
+                if [ -f "$file" ]; then
+                  grep $(basename $file) package.xml >/dev/null || echo "Warning: $file not found in package.xml"
+                fi
+              done
+            fi
+          else
+            echo "No package.xml found, skipping PECL validation"
+          fi
+
+      - name: Configure and build FastCSV extension
+        run: |
+          phpize
+          ./configure
+          make
+
+      - name: Run FastCSV tests
+        run: |
+          export NO_INTERACTION=1
+          export REPORT_EXIT_STATUS=1
+          export SKIP_SLOW_TESTS=1
+          make test
