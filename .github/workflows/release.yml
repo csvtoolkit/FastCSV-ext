@@ -89,70 +89,69 @@ jobs:
           overwrite: true
           include-hidden-files: false
           
-# Temporarily disabled Windows build due to environment issues
-#  build-windows:
-#    runs-on: windows-latest
-#    strategy:
-#      matrix:
-#        php-version: ['8.2', '8.3', '8.4']
-#        arch: ['x64', 'x86']
-#    steps:
-#      - uses: actions/checkout@v4
-#        with:
-#          submodules: true
-#          
-#      - name: Setup PHP
-#        uses: shivammathur/setup-php@v2
-#        with:
-#          php-version: ${{ matrix.php-version }}
-#          arch: ${{ matrix.arch }}
-#          extensions: none
-#          tools: phpize
-#          
-#      - name: Setup Visual Studio environment
-#        uses: microsoft/setup-msbuild@v1.1
-#        
-#      - name: Add PHP tools to PATH
-#        shell: pwsh
-#        run: |
-#          $phpDir = (Get-Command php).Path | Split-Path -Parent
-#          $devDir = Join-Path $phpDir "dev"
-#          echo "$devDir" | Out-File -FilePath $env:GITHUB_PATH -Append
-#          echo "$phpDir" | Out-File -FilePath $env:GITHUB_PATH -Append
-#          
-#      - name: Build extension
-#        shell: cmd
-#        run: |
-#          cd %GITHUB_WORKSPACE%
-#          phpize
-#          configure --enable-fastcsv
-#          nmake
-#          
-#      - name: Create dist directory
-#        run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
-#        
-#      - name: Copy extension
-#        shell: pwsh
-#        run: |
-#          Copy-Item "Release_TS\php_fastcsv.dll" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
-#          
-#      - name: Upload artifact
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}
-#          path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
-#          if-no-files-found: warn
-#          compression-level: 6
-#          overwrite: true
-#          include-hidden-files: false
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        php-version: ['8.2', '8.3', '8.4']
+        arch: ['x64']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          arch: ${{ matrix.arch }}
+          extensions: none
+          tools: phpize
+          
+      - name: Setup Visual Studio environment
+        uses: microsoft/setup-msbuild@v1.1
+        
+      - name: Add PHP tools to PATH
+        shell: pwsh
+        run: |
+          $phpDir = (Get-Command php).Path | Split-Path -Parent
+          $devDir = Join-Path $phpDir "dev"
+          echo "$devDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "$phpDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+          
+      - name: Build extension
+        shell: pwsh
+        run: |
+          cd $env:GITHUB_WORKSPACE
+          phpize
+          ./configure --enable-fastcsv
+          nmake
+          
+      - name: Create dist directory
+        run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
+        
+      - name: Copy extension
+        shell: pwsh
+        run: |
+          Copy-Item "Release_TS\php_fastcsv.dll" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}
+          path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: true
+          include-hidden-files: false
 
   create-release:
-    needs: [build-linux, build-macos]
+    needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Create release directories
         run: |
-          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,final}
+          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,windows,final}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -169,11 +168,11 @@ jobs:
         run: |
           echo "=== Starting file preparation ==="
           
-          # Debug - Show all .so files
-          echo "Looking for .so files..."
-          find dist/releases/${{ github.ref_name }} -name "*.so"
+          # Debug - Show all .so and .dll files
+          echo "Looking for .so and .dll files..."
+          find dist/releases/${{ github.ref_name }} -name "*.so" -o -name "*.dll"
           
-          # Process Linux builds - artifacts are downloaded into directories named after the artifact
+          # Process Linux builds
           echo "=== Processing Linux builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/linux-builds-php*; do
             if [ -d "$artifact_dir" ]; then
@@ -186,7 +185,7 @@ jobs:
             fi
           done
           
-          # Process macOS builds - artifacts are downloaded into directories named after the artifact
+          # Process macOS builds
           echo "=== Processing macOS builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/macos-builds-php*; do
             if [ -d "$artifact_dir" ]; then
@@ -195,6 +194,20 @@ jobs:
               for file in $(find "$artifact_dir" -name "*.so"); do
                 echo "Found macOS build: $file"
                 cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php${php_ver}.so"
+              done
+            fi
+          done
+
+          # Process Windows builds
+          echo "=== Processing Windows builds ==="
+          for artifact_dir in dist/releases/${{ github.ref_name }}/windows-builds-php*; do
+            if [ -d "$artifact_dir" ]; then
+              php_ver=$(basename "$artifact_dir" | grep -o 'php[0-9]\.[0-9]' | sed 's/php//')
+              arch=$(basename "$artifact_dir" | grep -o 'x64$')
+              echo "Processing Windows artifact directory: $artifact_dir for PHP $php_ver ($arch)"
+              for file in $(find "$artifact_dir" -name "*.dll"); do
+                echo "Found Windows build: $file"
+                cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php${php_ver}-${arch}.dll"
               done
             fi
           done
@@ -211,6 +224,7 @@ jobs:
           files: |
             dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php*.so
             dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php*.so
+            dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php*.dll
           name: Release ${{ github.ref_name }}
           body: |
             ## FastCSV Extension ${{ github.ref_name }}
@@ -226,10 +240,15 @@ jobs:
             - PHP 8.2: `fastcsv-macos-php8.2.so`
             - PHP 8.3: `fastcsv-macos-php8.3.so`
             - PHP 8.4: `fastcsv-macos-php8.4.so`
+
+            #### Windows:
+            - PHP 8.2 (x64): `fastcsv-windows-php8.2-x64.dll`
+            - PHP 8.3 (x64): `fastcsv-windows-php8.3-x64.dll`
+            - PHP 8.4 (x64): `fastcsv-windows-php8.4-x64.dll`
             
             ### Installation
             1. Download the appropriate file for your platform and PHP version
-            2. Rename the downloaded file to `fastcsv.so`
+            2. Rename the downloaded file to `fastcsv.so` (Linux/macOS) or `fastcsv.dll` (Windows)
             3. Copy the renamed file to your PHP extensions directory:
                ```bash
                # Find your PHP extension directory
@@ -240,7 +259,8 @@ jobs:
                ```
             4. Add to your php.ini:
                ```ini
-               extension=fastcsv.so
+               extension=fastcsv.so  # Linux/macOS
+               extension=fastcsv.dll  # Windows
                ```
             5. Restart your PHP service/server
             
@@ -248,9 +268,6 @@ jobs:
             ```bash
             # Check if the extension is loaded
             php -m | grep fastcsv
-            
-            # Or check via PHP
-            php -r "echo extension_loaded('fastcsv') ? 'FastCSV is installed!' : 'FastCSV is not installed';"
             ```
           draft: false
           prerelease: false
