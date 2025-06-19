@@ -21,6 +21,7 @@ extern zend_module_entry fastcsv_module_entry;
 #include "lib/csv_config.h"
 #include "lib/csv_reader.h"
 #include "lib/csv_writer.h"
+#include "lib/arena.h"
 
 // Class entries
 extern zend_class_entry *fastcsv_reader_ce;
@@ -29,16 +30,19 @@ extern zend_class_entry *fastcsv_config_ce;
 
 typedef struct _php_fastcsv_reader_object {
     CSVReader *reader;
+    Arena *arena;
     zend_object std;
 } php_fastcsv_reader_object;
 
 typedef struct _php_fastcsv_writer_object {
     CSVWriter *writer;
+    Arena *arena;
     zend_object std;
 } php_fastcsv_writer_object;
 
 typedef struct _php_fastcsv_config_object {
     CSVConfig *config;
+    Arena *arena;
     zend_object std;
 } php_fastcsv_config_object;
 
@@ -59,6 +63,7 @@ PHP_METHOD(FastCSVReader, seek);
 PHP_METHOD(FastCSVWriter, __construct);
 PHP_METHOD(FastCSVWriter, writeRecord);
 PHP_METHOD(FastCSVWriter, writeRecordMap);
+PHP_METHOD(FastCSVWriter, flush);
 PHP_METHOD(FastCSVWriter, close);
 
 PHP_METHOD(FastCSVConfig, __construct);
@@ -74,6 +79,20 @@ PHP_METHOD(FastCSVConfig, getOffset);
 PHP_METHOD(FastCSVConfig, setOffset);
 PHP_METHOD(FastCSVConfig, hasHeader);
 PHP_METHOD(FastCSVConfig, setHasHeader);
+PHP_METHOD(FastCSVConfig, getEncoding);
+PHP_METHOD(FastCSVConfig, setEncoding);
+PHP_METHOD(FastCSVConfig, getWriteBOM);
+PHP_METHOD(FastCSVConfig, setWriteBOM);
+PHP_METHOD(FastCSVConfig, getStrictMode);
+PHP_METHOD(FastCSVConfig, setStrictMode);
+PHP_METHOD(FastCSVConfig, getSkipEmptyLines);
+PHP_METHOD(FastCSVConfig, setSkipEmptyLines);
+PHP_METHOD(FastCSVConfig, getTrimFields);
+PHP_METHOD(FastCSVConfig, setTrimFields);
+PHP_METHOD(FastCSVConfig, getPreserveQuotes);
+PHP_METHOD(FastCSVConfig, setPreserveQuotes);
+PHP_METHOD(FastCSVConfig, getAutoFlush);
+PHP_METHOD(FastCSVConfig, setAutoFlush);
 
 #ifdef ZTS
 #define FASTCSV_G(v) TSRMG(fastcsv_globals_id, zend_fastcsv_globals *, v)

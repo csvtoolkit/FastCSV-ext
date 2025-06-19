@@ -37,6 +37,8 @@ static zend_object *fastcsv_reader_create_object(zend_class_entry *class_type) {
     
     intern = zend_object_alloc(sizeof(php_fastcsv_reader_object), class_type);
     intern->reader = NULL;
+    intern->arena = emalloc(sizeof(Arena));
+    arena_create(intern->arena, 1024 * 1024);
     
     zend_object_std_init(&intern->std, class_type);
     object_properties_init(&intern->std, class_type);
@@ -51,6 +53,8 @@ static zend_object *fastcsv_writer_create_object(zend_class_entry *class_type) {
     
     intern = zend_object_alloc(sizeof(php_fastcsv_writer_object), class_type);
     intern->writer = NULL;
+    intern->arena = emalloc(sizeof(Arena));
+    arena_create(intern->arena, 1024 * 1024);
     
     zend_object_std_init(&intern->std, class_type);
     object_properties_init(&intern->std, class_type);
@@ -65,6 +69,8 @@ static zend_object *fastcsv_config_create_object(zend_class_entry *class_type) {
     
     intern = zend_object_alloc(sizeof(php_fastcsv_config_object), class_type);
     intern->config = NULL;
+    intern->arena = emalloc(sizeof(Arena));
+    arena_create(intern->arena, 1024 * 1024);
     
     zend_object_std_init(&intern->std, class_type);
     object_properties_init(&intern->std, class_type);
@@ -82,6 +88,12 @@ static void fastcsv_reader_free_object(zend_object *object) {
         intern->reader = NULL;
     }
     
+    if (intern->arena) {
+        arena_destroy(intern->arena);
+        efree(intern->arena);
+        intern->arena = NULL;
+    }
+    
     zend_object_std_dtor(&intern->std);
 }
 
@@ -91,6 +103,12 @@ static void fastcsv_writer_free_object(zend_object *object) {
     if (intern->writer) {
         csv_writer_free(intern->writer);
         intern->writer = NULL;
+    }
+    
+    if (intern->arena) {
+        arena_destroy(intern->arena);
+        efree(intern->arena);
+        intern->arena = NULL;
     }
     
     zend_object_std_dtor(&intern->std);
@@ -104,29 +122,56 @@ static void fastcsv_config_free_object(zend_object *object) {
         intern->config = NULL;
     }
     
+    if (intern->arena) {
+        arena_destroy(intern->arena);
+        efree(intern->arena);
+        intern->arena = NULL;
+    }
+    
     zend_object_std_dtor(&intern->std);
 }
 
 PHP_METHOD(FastCSVReader, __construct) {
-    zval *config_zval;
+    zval *param_zval;
     php_fastcsv_reader_object *intern;
     php_fastcsv_config_object *config_obj;
+    CSVConfig *config;
     
     ZEND_PARSE_PARAMETERS_START(1, 1)
-        Z_PARAM_OBJECT_OF_CLASS(config_zval, fastcsv_config_ce)
+        Z_PARAM_ZVAL(param_zval)
     ZEND_PARSE_PARAMETERS_END();
     
     intern = Z_FASTCSV_READER_P(getThis());
-    config_obj = Z_FASTCSV_CONFIG_P(config_zval);
     
-    if (!config_obj->config) {
-        zend_throw_exception(zend_ce_exception, "Invalid FastCSVConfig object", 0);
-        RETURN_THROWS();
-    }
-    
-    intern->reader = csv_reader_init_with_config(config_obj->config);
-    if (!intern->reader) {
-        zend_throw_exception(zend_ce_exception, "Failed to open CSV file", 0);
+    if (Z_TYPE_P(param_zval) == IS_STRING) {
+        config = csv_config_create(intern->arena);
+        if (!config) {
+            zend_throw_exception(zend_ce_exception, "Failed to create default config", 0);
+            RETURN_THROWS();
+        }
+        
+        csv_config_set_path(config, Z_STRVAL_P(param_zval));
+        
+        intern->reader = csv_reader_init_with_config(intern->arena, config);
+        if (!intern->reader) {
+            zend_throw_exception(zend_ce_exception, "Failed to open CSV file", 0);
+            RETURN_THROWS();
+        }
+    } else if (Z_TYPE_P(param_zval) == IS_OBJECT && instanceof_function(Z_OBJCE_P(param_zval), fastcsv_config_ce)) {
+        config_obj = Z_FASTCSV_CONFIG_P(param_zval);
+        
+        if (!config_obj->config) {
+            zend_throw_exception(zend_ce_exception, "Invalid FastCSVConfig object", 0);
+            RETURN_THROWS();
+        }
+        
+        intern->reader = csv_reader_init_with_config(intern->arena, config_obj->config);
+        if (!intern->reader) {
+            zend_throw_exception(zend_ce_exception, "Failed to open CSV file", 0);
+            RETURN_THROWS();
+        }
+    } else {
+        zend_throw_exception(zend_ce_exception, "Expected string (file path) or FastCSVConfig object", 0);
         RETURN_THROWS();
     }
 }
@@ -142,17 +187,22 @@ PHP_METHOD(FastCSVReader, getHeaders) {
     intern = Z_FASTCSV_READER_P(getThis());
     
     if (!intern->reader) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Reader not initialized", 0);
+        RETURN_THROWS();
     }
     
     headers = csv_reader_get_headers(intern->reader, &header_count);
-    if (!headers) {
-        RETURN_FALSE;
+    if (!headers || header_count <= 0) {
+        RETURN_NULL();
     }
     
     array_init(return_value);
     for (i = 0; i < header_count; i++) {
-        add_next_index_string(return_value, headers[i]);
+        if (headers[i]) {
+            add_next_index_string(return_value, headers[i]);
+        } else {
+            add_next_index_null(return_value);
+        }
     }
 }
 
@@ -166,17 +216,22 @@ PHP_METHOD(FastCSVReader, nextRecord) {
     intern = Z_FASTCSV_READER_P(getThis());
     
     if (!intern->reader) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Reader not initialized", 0);
+        RETURN_THROWS();
     }
     
     record = csv_reader_next_record(intern->reader);
     if (!record) {
-        RETURN_FALSE;
+        RETURN_NULL();
     }
     
     array_init(return_value);
     for (i = 0; i < record->field_count; i++) {
-        add_next_index_string(return_value, record->fields[i]);
+        if (record->fields[i]) {
+            add_next_index_string(return_value, record->fields[i]);
+        } else {
+            add_next_index_null(return_value);
+        }
     }
 }
 
@@ -193,7 +248,10 @@ PHP_METHOD(FastCSVReader, close)
     if (intern->reader) {
         csv_reader_free(intern->reader);
         intern->reader = NULL;
+        RETURN_TRUE;
     }
+    
+    RETURN_FALSE;
 }
 
 PHP_METHOD(FastCSVReader, rewind) {
@@ -203,9 +261,13 @@ PHP_METHOD(FastCSVReader, rewind) {
     
     intern = Z_FASTCSV_READER_P(getThis());
     
-    if (intern->reader) {
-        csv_reader_rewind(intern->reader);
+    if (!intern->reader) {
+        zend_throw_exception(zend_ce_exception, "Reader not initialized", 0);
+        RETURN_THROWS();
     }
+    
+    csv_reader_rewind(intern->reader);
+    RETURN_TRUE;
 }
 
 PHP_METHOD(FastCSVReader, setConfig) {
@@ -221,14 +283,20 @@ PHP_METHOD(FastCSVReader, setConfig) {
     config_obj = Z_FASTCSV_CONFIG_P(config_zval);
     
     if (!config_obj->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Invalid FastCSVConfig object", 0);
+        RETURN_THROWS();
     }
     
     if (intern->reader) {
-        RETURN_BOOL(csv_reader_set_config(intern->reader, config_obj->config) == 1);
+        int result = csv_reader_set_config(intern->reader, intern->arena, config_obj->config);
+        RETURN_BOOL(result == 1);
     } else {
-        intern->reader = csv_reader_init_with_config(config_obj->config);
-        RETURN_BOOL(intern->reader != NULL);
+        intern->reader = csv_reader_init_with_config(intern->arena, config_obj->config);
+        if (!intern->reader) {
+            zend_throw_exception(zend_ce_exception, "Failed to initialize reader with config", 0);
+            RETURN_THROWS();
+        }
+        RETURN_TRUE;
     }
 }
 
@@ -241,7 +309,8 @@ PHP_METHOD(FastCSVReader, getRecordCount) {
     intern = Z_FASTCSV_READER_P(getThis());
     
     if (!intern->reader) {
-        RETURN_LONG(-1);
+        zend_throw_exception(zend_ce_exception, "Reader not initialized", 0);
+        RETURN_THROWS();
     }
     
     count = csv_reader_get_record_count(intern->reader);
@@ -257,7 +326,8 @@ PHP_METHOD(FastCSVReader, getPosition) {
     intern = Z_FASTCSV_READER_P(getThis());
     
     if (!intern->reader) {
-        RETURN_LONG(-1);
+        zend_throw_exception(zend_ce_exception, "Reader not initialized", 0);
+        RETURN_THROWS();
     }
     
     position = csv_reader_get_position(intern->reader);
@@ -268,8 +338,6 @@ PHP_METHOD(FastCSVReader, seek) {
     zend_long position;
     php_fastcsv_reader_object *intern;
     int result;
-    CSVRecord *record;
-    int i;
     
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_LONG(position)
@@ -278,24 +346,17 @@ PHP_METHOD(FastCSVReader, seek) {
     intern = Z_FASTCSV_READER_P(getThis());
     
     if (!intern->reader) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Reader not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    if (position < 0) {
+        zend_throw_exception(zend_ce_exception, "Position must be non-negative", 0);
+        RETURN_THROWS();
     }
     
     result = csv_reader_seek(intern->reader, position);
-    if (!result) {
-        RETURN_FALSE;
-    }
-    
-    // After successful seek, get the record at that position
-    record = csv_reader_next_record(intern->reader);
-    if (!record) {
-        RETURN_FALSE;
-    }
-    
-    array_init(return_value);
-    for (i = 0; i < record->field_count; i++) {
-        add_next_index_string(return_value, record->fields[i]);
-    }
+    RETURN_BOOL(result == 1);
 }
 
 PHP_METHOD(FastCSVReader, hasNext) {
@@ -307,33 +368,52 @@ PHP_METHOD(FastCSVReader, hasNext) {
     intern = Z_FASTCSV_READER_P(getThis());
     
     if (!intern->reader) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Reader not initialized", 0);
+        RETURN_THROWS();
     }
     
     has_next = csv_reader_has_next(intern->reader);
-    RETURN_BOOL(has_next);
+    RETURN_BOOL(has_next == 1);
 }
 
 PHP_METHOD(FastCSVWriter, __construct) {
-    zval *config_obj;
+    zval *param1_zval;
     zval *headers_array;
     php_fastcsv_writer_object *intern;
     php_fastcsv_config_object *config_intern;
+    CSVConfig *config;
     char **headers;
     int header_count;
     zval *header_val;
     int i;
+    CSVWriterResult result;
     
     ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_OBJECT_OF_CLASS(config_obj, fastcsv_config_ce)
+        Z_PARAM_ZVAL(param1_zval)
         Z_PARAM_ARRAY(headers_array)
     ZEND_PARSE_PARAMETERS_END();
     
     intern = Z_FASTCSV_WRITER_P(getThis());
-    config_intern = Z_FASTCSV_CONFIG_P(config_obj);
     
-    if (!config_intern->config) {
-        zend_throw_exception(zend_ce_exception, "Invalid FastCSVConfig object", 0);
+    if (Z_TYPE_P(param1_zval) == IS_STRING) {
+        config = csv_config_create(intern->arena);
+        if (!config) {
+            zend_throw_exception(zend_ce_exception, "Failed to create default config", 0);
+            RETURN_THROWS();
+        }
+        
+        csv_config_set_path(config, Z_STRVAL_P(param1_zval));
+    } else if (Z_TYPE_P(param1_zval) == IS_OBJECT && instanceof_function(Z_OBJCE_P(param1_zval), fastcsv_config_ce)) {
+        config_intern = Z_FASTCSV_CONFIG_P(param1_zval);
+        
+        if (!config_intern->config) {
+            zend_throw_exception(zend_ce_exception, "Invalid FastCSVConfig object", 0);
+            RETURN_THROWS();
+        }
+        
+        config = config_intern->config;
+    } else {
+        zend_throw_exception(zend_ce_exception, "Expected string (file path) or FastCSVConfig object as first parameter", 0);
         RETURN_THROWS();
     }
     
@@ -348,10 +428,10 @@ PHP_METHOD(FastCSVWriter, __construct) {
         }
     } ZEND_HASH_FOREACH_END();
     
-    intern->writer = csv_writer_init(config_intern->config, headers, header_count);
+    result = csv_writer_init(&intern->writer, config, headers, header_count, intern->arena);
     efree(headers);
     
-    if (!intern->writer) {
+    if (result != CSV_WRITER_OK) {
         zend_throw_exception(zend_ce_exception, "Failed to create CSV file", 0);
         RETURN_THROWS();
     }
@@ -365,7 +445,7 @@ PHP_METHOD(FastCSVWriter, writeRecord) {
     int field_count;
     zval *field_val;
     int i;
-    int result;
+    CSVWriterResult result;
     
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_ARRAY(fields_array)
@@ -374,10 +454,15 @@ PHP_METHOD(FastCSVWriter, writeRecord) {
     intern = Z_FASTCSV_WRITER_P(getThis());
     
     if (!intern->writer) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Writer not initialized", 0);
+        RETURN_THROWS();
     }
     
     field_count = zend_hash_num_elements(Z_ARRVAL_P(fields_array));
+    if (field_count == 0) {
+        RETURN_FALSE;
+    }
+    
     fields = emalloc(field_count * sizeof(char*));
     converted_strings = ecalloc(field_count, sizeof(zend_string*));
     
@@ -386,8 +471,10 @@ PHP_METHOD(FastCSVWriter, writeRecord) {
         if (Z_TYPE_P(field_val) == IS_STRING) {
             fields[i] = Z_STRVAL_P(field_val);
             converted_strings[i] = NULL;
+        } else if (Z_TYPE_P(field_val) == IS_NULL) {
+            fields[i] = "";
+            converted_strings[i] = NULL;
         } else {
-            // Convert non-string values to string representation
             converted_strings[i] = zval_get_string(field_val);
             fields[i] = ZSTR_VAL(converted_strings[i]);
         }
@@ -396,7 +483,6 @@ PHP_METHOD(FastCSVWriter, writeRecord) {
     
     result = csv_writer_write_record(intern->writer, fields, field_count);
     
-    // Free converted strings
     for (i = 0; i < field_count; i++) {
         if (converted_strings[i]) {
             zend_string_release(converted_strings[i]);
@@ -406,7 +492,12 @@ PHP_METHOD(FastCSVWriter, writeRecord) {
     efree(fields);
     efree(converted_strings);
     
-    RETURN_BOOL(result == 0);
+    if (result != CSV_WRITER_OK) {
+        zend_throw_exception(zend_ce_exception, csv_writer_error_string(result), 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_TRUE;
 }
 
 PHP_METHOD(FastCSVWriter, writeRecordMap) {
@@ -419,7 +510,7 @@ PHP_METHOD(FastCSVWriter, writeRecordMap) {
     zend_string *key;
     zval *val;
     int i;
-    int result;
+    CSVWriterResult result;
     
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_ARRAY(fields_map)
@@ -428,10 +519,15 @@ PHP_METHOD(FastCSVWriter, writeRecordMap) {
     intern = Z_FASTCSV_WRITER_P(getThis());
     
     if (!intern->writer) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Writer not initialized", 0);
+        RETURN_THROWS();
     }
     
     field_count = zend_hash_num_elements(Z_ARRVAL_P(fields_map));
+    if (field_count == 0) {
+        RETURN_FALSE;
+    }
+    
     field_names = emalloc(field_count * sizeof(char*));
     field_values = emalloc(field_count * sizeof(char*));
     converted_strings = ecalloc(field_count, sizeof(zend_string*));
@@ -443,8 +539,10 @@ PHP_METHOD(FastCSVWriter, writeRecordMap) {
             if (Z_TYPE_P(val) == IS_STRING) {
                 field_values[i] = Z_STRVAL_P(val);
                 converted_strings[i] = NULL;
+            } else if (Z_TYPE_P(val) == IS_NULL) {
+                field_values[i] = "";
+                converted_strings[i] = NULL;
             } else {
-                // Convert non-string values to string representation
                 converted_strings[i] = zval_get_string(val);
                 field_values[i] = ZSTR_VAL(converted_strings[i]);
             }
@@ -454,7 +552,6 @@ PHP_METHOD(FastCSVWriter, writeRecordMap) {
     
     result = csv_writer_write_record_map(intern->writer, field_names, field_values, field_count);
     
-    // Free converted strings
     for (i = 0; i < field_count; i++) {
         if (converted_strings[i]) {
             zend_string_release(converted_strings[i]);
@@ -465,7 +562,34 @@ PHP_METHOD(FastCSVWriter, writeRecordMap) {
     efree(field_values);
     efree(converted_strings);
     
-    RETURN_BOOL(result == 0);
+    if (result != CSV_WRITER_OK) {
+        zend_throw_exception(zend_ce_exception, csv_writer_error_string(result), 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_TRUE;
+}
+
+PHP_METHOD(FastCSVWriter, flush) {
+    php_fastcsv_writer_object *intern;
+    CSVWriterResult result;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_WRITER_P(getThis());
+    
+    if (!intern->writer) {
+        zend_throw_exception(zend_ce_exception, "Writer not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    result = csv_writer_flush(intern->writer);
+    if (result != CSV_WRITER_OK) {
+        zend_throw_exception(zend_ce_exception, csv_writer_error_string(result), 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_TRUE;
 }
 
 PHP_METHOD(FastCSVWriter, close) {
@@ -478,7 +602,10 @@ PHP_METHOD(FastCSVWriter, close) {
     if (intern->writer) {
         csv_writer_free(intern->writer);
         intern->writer = NULL;
+        RETURN_TRUE;
     }
+    
+    RETURN_FALSE;
 }
 
 PHP_METHOD(FastCSVConfig, __construct) {
@@ -487,8 +614,8 @@ PHP_METHOD(FastCSVConfig, __construct) {
     ZEND_PARSE_PARAMETERS_NONE();
     
     intern = Z_FASTCSV_CONFIG_P(getThis());
-    intern->config = csv_config_create();
     
+    intern->config = csv_config_create(intern->arena);
     if (!intern->config) {
         zend_throw_exception(zend_ce_exception, "Failed to create CSV config", 0);
         RETURN_THROWS();
@@ -504,7 +631,8 @@ PHP_METHOD(FastCSVConfig, getDelimiter) {
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
     delimiter_str[0] = csv_config_get_delimiter(intern->config);
@@ -524,8 +652,14 @@ PHP_METHOD(FastCSVConfig, setDelimiter) {
     
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
-    if (!intern->config || delimiter_len != 1) {
-        RETURN_FALSE;
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    if (delimiter_len != 1) {
+        zend_throw_exception(zend_ce_exception, "Delimiter must be exactly one character", 0);
+        RETURN_THROWS();
     }
     
     csv_config_set_delimiter(intern->config, delimiter[0]);
@@ -541,7 +675,8 @@ PHP_METHOD(FastCSVConfig, getEnclosure) {
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
     enclosure_str[0] = csv_config_get_enclosure(intern->config);
@@ -561,8 +696,14 @@ PHP_METHOD(FastCSVConfig, setEnclosure) {
     
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
-    if (!intern->config || enclosure_len != 1) {
-        RETURN_FALSE;
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    if (enclosure_len != 1) {
+        zend_throw_exception(zend_ce_exception, "Enclosure must be exactly one character", 0);
+        RETURN_THROWS();
     }
     
     csv_config_set_enclosure(intern->config, enclosure[0]);
@@ -578,7 +719,8 @@ PHP_METHOD(FastCSVConfig, getEscape) {
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
     escape_str[0] = csv_config_get_escape(intern->config);
@@ -598,8 +740,14 @@ PHP_METHOD(FastCSVConfig, setEscape) {
     
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
-    if (!intern->config || escape_len != 1) {
-        RETURN_FALSE;
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    if (escape_len != 1) {
+        zend_throw_exception(zend_ce_exception, "Escape character must be exactly one character", 0);
+        RETURN_THROWS();
     }
     
     csv_config_set_escape(intern->config, escape[0]);
@@ -608,16 +756,19 @@ PHP_METHOD(FastCSVConfig, setEscape) {
 
 PHP_METHOD(FastCSVConfig, getPath) {
     php_fastcsv_config_object *intern;
+    const char *path;
     
     ZEND_PARSE_PARAMETERS_NONE();
     
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
-    RETURN_STRING(csv_config_get_path(intern->config));
+    path = csv_config_get_path(intern->config);
+    RETURN_STRING(path ? path : "");
 }
 
 PHP_METHOD(FastCSVConfig, setPath) {
@@ -632,7 +783,8 @@ PHP_METHOD(FastCSVConfig, setPath) {
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
     csv_config_set_path(intern->config, path);
@@ -641,16 +793,19 @@ PHP_METHOD(FastCSVConfig, setPath) {
 
 PHP_METHOD(FastCSVConfig, getOffset) {
     php_fastcsv_config_object *intern;
+    int offset;
     
     ZEND_PARSE_PARAMETERS_NONE();
     
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
-    RETURN_LONG(csv_config_get_offset(intern->config));
+    offset = csv_config_get_offset(intern->config);
+    RETURN_LONG(offset);
 }
 
 PHP_METHOD(FastCSVConfig, setOffset) {
@@ -664,7 +819,13 @@ PHP_METHOD(FastCSVConfig, setOffset) {
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    if (offset < 0) {
+        zend_throw_exception(zend_ce_exception, "Offset must be non-negative", 0);
+        RETURN_THROWS();
     }
     
     csv_config_set_offset(intern->config, (int)offset);
@@ -673,20 +834,23 @@ PHP_METHOD(FastCSVConfig, setOffset) {
 
 PHP_METHOD(FastCSVConfig, hasHeader) {
     php_fastcsv_config_object *intern;
+    bool has_header;
     
     ZEND_PARSE_PARAMETERS_NONE();
     
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
-    RETURN_BOOL(csv_config_has_header(intern->config));
+    has_header = csv_config_has_header(intern->config);
+    RETURN_BOOL(has_header);
 }
 
 PHP_METHOD(FastCSVConfig, setHasHeader) {
-    zend_bool has_header;
+    bool has_header;
     php_fastcsv_config_object *intern;
     
     ZEND_PARSE_PARAMETERS_START(1, 1)
@@ -696,16 +860,255 @@ PHP_METHOD(FastCSVConfig, setHasHeader) {
     intern = Z_FASTCSV_CONFIG_P(getThis());
     
     if (!intern->config) {
-        RETURN_FALSE;
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
     }
     
     csv_config_set_has_header(intern->config, has_header);
     RETURN_ZVAL(getThis(), 1, 0);
 }
 
+PHP_METHOD(FastCSVConfig, getEncoding) {
+    php_fastcsv_config_object *intern;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_LONG(csv_config_get_encoding(intern->config));
+}
+
+PHP_METHOD(FastCSVConfig, setEncoding) {
+    php_fastcsv_config_object *intern;
+    zend_long encoding;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_LONG(encoding)
+    ZEND_PARSE_PARAMETERS_END();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    csv_config_set_encoding(intern->config, (CSVEncoding)encoding);
+    RETURN_ZVAL(getThis(), 1, 0);
+}
+
+PHP_METHOD(FastCSVConfig, getWriteBOM) {
+    php_fastcsv_config_object *intern;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_BOOL(csv_config_get_write_bom(intern->config));
+}
+
+PHP_METHOD(FastCSVConfig, setWriteBOM) {
+    php_fastcsv_config_object *intern;
+    zend_bool writeBOM;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_BOOL(writeBOM)
+    ZEND_PARSE_PARAMETERS_END();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    csv_config_set_write_bom(intern->config, writeBOM);
+    RETURN_ZVAL(getThis(), 1, 0);
+}
+
+PHP_METHOD(FastCSVConfig, getStrictMode) {
+    php_fastcsv_config_object *intern;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_BOOL(csv_config_get_strict_mode(intern->config));
+}
+
+PHP_METHOD(FastCSVConfig, setStrictMode) {
+    php_fastcsv_config_object *intern;
+    zend_bool strictMode;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_BOOL(strictMode)
+    ZEND_PARSE_PARAMETERS_END();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    csv_config_set_strict_mode(intern->config, strictMode);
+    RETURN_ZVAL(getThis(), 1, 0);
+}
+
+PHP_METHOD(FastCSVConfig, getSkipEmptyLines) {
+    php_fastcsv_config_object *intern;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_BOOL(csv_config_get_skip_empty_lines(intern->config));
+}
+
+PHP_METHOD(FastCSVConfig, setSkipEmptyLines) {
+    php_fastcsv_config_object *intern;
+    zend_bool skipEmptyLines;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_BOOL(skipEmptyLines)
+    ZEND_PARSE_PARAMETERS_END();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    csv_config_set_skip_empty_lines(intern->config, skipEmptyLines);
+    RETURN_ZVAL(getThis(), 1, 0);
+}
+
+PHP_METHOD(FastCSVConfig, getTrimFields) {
+    php_fastcsv_config_object *intern;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_BOOL(csv_config_get_trim_fields(intern->config));
+}
+
+PHP_METHOD(FastCSVConfig, setTrimFields) {
+    php_fastcsv_config_object *intern;
+    zend_bool trimFields;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_BOOL(trimFields)
+    ZEND_PARSE_PARAMETERS_END();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    csv_config_set_trim_fields(intern->config, trimFields);
+    RETURN_ZVAL(getThis(), 1, 0);
+}
+
+PHP_METHOD(FastCSVConfig, getPreserveQuotes) {
+    php_fastcsv_config_object *intern;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_BOOL(csv_config_get_preserve_quotes(intern->config));
+}
+
+PHP_METHOD(FastCSVConfig, setPreserveQuotes) {
+    php_fastcsv_config_object *intern;
+    zend_bool preserveQuotes;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_BOOL(preserveQuotes)
+    ZEND_PARSE_PARAMETERS_END();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    csv_config_set_preserve_quotes(intern->config, preserveQuotes);
+    RETURN_ZVAL(getThis(), 1, 0);
+}
+
+PHP_METHOD(FastCSVConfig, getAutoFlush) {
+    php_fastcsv_config_object *intern;
+    
+    ZEND_PARSE_PARAMETERS_NONE();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    RETURN_BOOL(csv_config_get_auto_flush(intern->config));
+}
+
+PHP_METHOD(FastCSVConfig, setAutoFlush) {
+    php_fastcsv_config_object *intern;
+    zend_bool autoFlush;
+    
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_BOOL(autoFlush)
+    ZEND_PARSE_PARAMETERS_END();
+    
+    intern = Z_FASTCSV_CONFIG_P(getThis());
+    
+    if (!intern->config) {
+        zend_throw_exception(zend_ce_exception, "Config not initialized", 0);
+        RETURN_THROWS();
+    }
+    
+    csv_config_set_auto_flush(intern->config, autoFlush);
+    RETURN_ZVAL(getThis(), 1, 0);
+}
+
 /* Arginfo for FastCSVReader methods */
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_reader_construct, 0, 0, 1)
-    ZEND_ARG_OBJ_INFO(0, config, FastCSVConfig, 0)
+    ZEND_ARG_INFO(0, configOrPath)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_reader_get_headers, 0, 0, 0)
@@ -739,7 +1142,7 @@ ZEND_END_ARG_INFO()
 
 /* Arginfo for FastCSVWriter methods */
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_writer_construct, 0, 0, 2)
-    ZEND_ARG_OBJ_INFO(0, config, FastCSVConfig, 0)
+    ZEND_ARG_INFO(0, configOrPath)
     ZEND_ARG_TYPE_INFO(0, headers, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
@@ -749,6 +1152,9 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_writer_write_record_map, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, fields_map, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_writer_flush, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_writer_close, 0, 0, 0)
@@ -800,6 +1206,55 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_has_header, 0, 0, 1)
     ZEND_ARG_INFO(0, hasHeader)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_get_encoding, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_encoding, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, encoding, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_get_write_bom, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_write_bom, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, writeBOM, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_get_strict_mode, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_strict_mode, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, strictMode, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_get_skip_empty_lines, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_skip_empty_lines, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, skipEmptyLines, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_get_trim_fields, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_trim_fields, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, trimFields, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_get_preserve_quotes, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_preserve_quotes, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, preserveQuotes, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_get_auto_flush, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fastcsv_config_set_auto_flush, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, autoFlush, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
 static const zend_function_entry fastcsv_reader_methods[] = {
     PHP_ME(FastCSVReader, __construct, arginfo_fastcsv_reader_construct, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVReader, getHeaders, arginfo_fastcsv_reader_get_headers, ZEND_ACC_PUBLIC)
@@ -818,12 +1273,13 @@ static const zend_function_entry fastcsv_writer_methods[] = {
     PHP_ME(FastCSVWriter, __construct, arginfo_fastcsv_writer_construct, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVWriter, writeRecord, arginfo_fastcsv_writer_write_record, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVWriter, writeRecordMap, arginfo_fastcsv_writer_write_record_map, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVWriter, flush, arginfo_fastcsv_writer_flush, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVWriter, close, arginfo_fastcsv_writer_close, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
 static const zend_function_entry fastcsv_config_methods[] = {
-    PHP_ME(FastCSVConfig, __construct, arginfo_fastcsv_config_construct, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, __construct, arginfo_fastcsv_config_construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(FastCSVConfig, getDelimiter, arginfo_fastcsv_config_get_delimiter, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVConfig, setDelimiter, arginfo_fastcsv_config_set_delimiter, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVConfig, getEnclosure, arginfo_fastcsv_config_get_enclosure, ZEND_ACC_PUBLIC)
@@ -836,6 +1292,20 @@ static const zend_function_entry fastcsv_config_methods[] = {
     PHP_ME(FastCSVConfig, setOffset, arginfo_fastcsv_config_set_offset, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVConfig, hasHeader, arginfo_fastcsv_config_has_header, ZEND_ACC_PUBLIC)
     PHP_ME(FastCSVConfig, setHasHeader, arginfo_fastcsv_config_set_has_header, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, getEncoding, arginfo_fastcsv_config_get_encoding, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, setEncoding, arginfo_fastcsv_config_set_encoding, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, getWriteBOM, arginfo_fastcsv_config_get_write_bom, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, setWriteBOM, arginfo_fastcsv_config_set_write_bom, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, getStrictMode, arginfo_fastcsv_config_get_strict_mode, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, setStrictMode, arginfo_fastcsv_config_set_strict_mode, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, getSkipEmptyLines, arginfo_fastcsv_config_get_skip_empty_lines, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, setSkipEmptyLines, arginfo_fastcsv_config_set_skip_empty_lines, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, getTrimFields, arginfo_fastcsv_config_get_trim_fields, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, setTrimFields, arginfo_fastcsv_config_set_trim_fields, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, getPreserveQuotes, arginfo_fastcsv_config_get_preserve_quotes, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, setPreserveQuotes, arginfo_fastcsv_config_set_preserve_quotes, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, getAutoFlush, arginfo_fastcsv_config_get_auto_flush, ZEND_ACC_PUBLIC)
+    PHP_ME(FastCSVConfig, setAutoFlush, arginfo_fastcsv_config_set_auto_flush, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -865,6 +1335,15 @@ PHP_MINIT_FUNCTION(fastcsv) {
     memcpy(&fastcsv_config_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
     fastcsv_config_handlers.offset = XtOffsetOf(php_fastcsv_config_object, std);
     fastcsv_config_handlers.free_obj = fastcsv_config_free_object;
+
+    // Register encoding constants
+    REGISTER_LONG_CONSTANT("CSV_ENCODING_UTF8", CSV_ENCODING_UTF8, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("CSV_ENCODING_UTF16LE", CSV_ENCODING_UTF16LE, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("CSV_ENCODING_UTF16BE", CSV_ENCODING_UTF16BE, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("CSV_ENCODING_UTF32LE", CSV_ENCODING_UTF32LE, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("CSV_ENCODING_UTF32BE", CSV_ENCODING_UTF32BE, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("CSV_ENCODING_ASCII", CSV_ENCODING_ASCII, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("CSV_ENCODING_LATIN1", CSV_ENCODING_LATIN1, CONST_CS | CONST_PERSISTENT);
     
     return SUCCESS;
 }
