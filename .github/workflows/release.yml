@@ -93,108 +93,19 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        php-version: ['8.2', '8.3']
+        php-version: ['8.2', '8.3', '8.4']
         arch: ['x64']
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: true
           
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - name: Build The Extension
+        uses: php/php-windows-builder/extension@v1
         with:
           php-version: ${{ matrix.php-version }}
-          extensions: none
-          
-      - name: Setup Visual Studio environment
-        uses: microsoft/setup-msbuild@v2
-        
-      - name: Download PHP SDK
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/Microsoft/php-sdk-binary-tools/archive/refs/heads/master.zip" -OutFile "php-sdk.zip"
-          Expand-Archive -Path "php-sdk.zip" -DestinationPath "."
-          Rename-Item "php-sdk-binary-tools-master" "php-sdk"
-          
-      - name: Download PHP Dev Pack
-        shell: pwsh
-        run: |
-          $phpVersion = "${{ matrix.php-version }}"
-          
-          # Try multiple version formats and patch versions
-          $versionCandidates = @()
-          
-          switch ($phpVersion) {
-            "8.2" { 
-              $versionCandidates = @("8.2.26", "8.2.25", "8.2.24", "8.2.23")
-            }
-            "8.3" { 
-              $versionCandidates = @("8.3.14", "8.3.13", "8.3.12", "8.3.11")
-            }
-            default { 
-              $versionCandidates = @("${phpVersion}.0", "${phpVersion}.1")
-            }
-          }
-          
-          $downloaded = $false
-          foreach ($version in $versionCandidates) {
-            $devPackUrl = "https://windows.php.net/downloads/releases/php-devel-pack-${version}-Win32-vs16-${{ matrix.arch }}.zip"
-            Write-Host "Trying to download PHP Dev Pack from: $devPackUrl"
-            
-            try {
-              Invoke-WebRequest -Uri $devPackUrl -OutFile "php-devel-pack.zip" -ErrorAction Stop
-              Write-Host "Successfully downloaded dev pack for PHP $version"
-              $downloaded = $true
-              break
-            } catch {
-              Write-Host "Failed to download dev pack for PHP $version"
-              continue
-            }
-          }
-          
-          if (-not $downloaded) {
-            Write-Host "ERROR: Could not download PHP dev pack for any version of PHP $phpVersion"
-            exit 1
-          }
-          
-          Expand-Archive -Path "php-devel-pack.zip" -DestinationPath "."
-          $devPackDir = Get-ChildItem -Directory -Filter "php-*-devel-*" | Select-Object -First 1
-          if ($devPackDir) {
-            Write-Host "Found dev pack directory: $($devPackDir.Name)"
-            Rename-Item $devPackDir.FullName "php-dev"
-          } else {
-            Write-Host "ERROR: Could not find dev pack directory after extraction"
-            Get-ChildItem -Directory | Select-Object Name
-            exit 1
-          }
-          
-      - name: Build extension
-        shell: cmd
-        run: |
-          set PHP_SDK_ROOT=%CD%\php-sdk
-          set PHP_DEV_ROOT=%CD%\php-dev
-          
-          call "%PHP_SDK_ROOT%\phpsdk-vs16-x64.bat"
-          
-          echo Current directory: %CD%
-          dir
-          
-          echo Setting up build environment...
-          set PHPRC=%PHP_DEV_ROOT%
-          set PHP_BUILD_DIR=%CD%
-          
-          echo Building extension...
-          "%PHP_DEV_ROOT%\phpize.bat"
-          if errorlevel 1 exit /b 1
-          
-          configure.bat --enable-fastcsv --with-php-build="%PHP_DEV_ROOT%"
-          if errorlevel 1 exit /b 1
-          
-          nmake
-          if errorlevel 1 exit /b 1
-          
-          echo Build completed. Looking for output files:
-          dir /s *.dll | findstr fastcsv
+          arch: ${{ matrix.arch }}
           
       - name: Create dist directory
         run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
@@ -337,8 +248,7 @@ jobs:
             #### Windows:
             - PHP 8.2 (x64): `fastcsv-windows-php8.2-x64.dll`
             - PHP 8.3 (x64): `fastcsv-windows-php8.3-x64.dll`
-            
-            **Note**: PHP 8.4 Windows builds are temporarily unavailable due to dev pack availability.
+            - PHP 8.4 (x64): `fastcsv-windows-php8.4-x64.dll`
             
             ### Installation
             1. Download the appropriate file for your platform and PHP version
