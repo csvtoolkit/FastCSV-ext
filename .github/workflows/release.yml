@@ -114,6 +114,23 @@ jobs:
         with:
           submodules: true
           
+      - name: Initialize and update submodules
+        run: |
+          git submodule update --init --recursive
+          
+      - name: Verify submodule files
+        run: |
+          echo "Checking if lib directory and files exist:"
+          dir lib
+          echo "Checking specific source files:"
+          if (Test-Path "lib\arena.c") { echo "arena.c exists" } else { echo "arena.c missing" }
+          if (Test-Path "lib\csv_config.c") { echo "csv_config.c exists" } else { echo "csv_config.c missing" }
+          if (Test-Path "lib\csv_reader.c") { echo "csv_reader.c exists" } else { echo "csv_reader.c missing" }
+          if (Test-Path "lib\csv_writer.c") { echo "csv_writer.c exists" } else { echo "csv_writer.c missing" }
+          if (Test-Path "lib\csv_parser.c") { echo "csv_parser.c exists" } else { echo "csv_parser.c missing" }
+          if (Test-Path "lib\csv_utils.c") { echo "csv_utils.c exists" } else { echo "csv_utils.c missing" }
+        shell: pwsh
+          
       - name: Build The Extension
         uses: php/php-windows-builder/extension@v1
         with:
