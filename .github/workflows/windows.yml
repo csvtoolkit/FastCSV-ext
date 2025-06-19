@@ -28,11 +28,37 @@ jobs:
       - name: Checkout fastcsv
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
           
-      - name: Initialize submodules
+      - name: Verify submodule files (Windows)
         run: |
-          git submodule update --init --recursive
+          echo "Checking repository structure..."
+          Get-ChildItem -Path . -Name
+          echo ""
+          echo "Checking if lib directory exists:"
+          if (Test-Path "lib") {
+            echo "lib directory found"
+            Get-ChildItem -Path "lib" -Name
+          } else {
+            echo "lib directory missing!"
+          }
+          echo ""
+          echo "Checking main extension files:"
+          if (Test-Path "fastcsv.c") { echo "fastcsv.c exists" } else { echo "fastcsv.c missing" }
+          if (Test-Path "php_fastcsv.h") { echo "php_fastcsv.h exists" } else { echo "php_fastcsv.h missing" }
+          if (Test-Path "config.w32") { echo "config.w32 exists" } else { echo "config.w32 missing" }
+          echo ""
+          echo "Checking specific lib source files:"
+          $libFiles = @("arena.c", "csv_config.c", "csv_reader.c", "csv_writer.c", "csv_parser.c", "csv_utils.c")
+          foreach ($file in $libFiles) {
+            if (Test-Path "lib\$file") { 
+              echo "$file exists" 
+            } else { 
+              echo "$file missing"
+              exit 1
+            }
+          }
+        shell: pwsh
           
       - name: Build the extension
         uses: php/php-windows-builder/extension@v1
