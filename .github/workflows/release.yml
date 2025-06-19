@@ -220,12 +220,14 @@ jobs:
           echo "=== Processing Windows builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/windows-builds-php*; do
             if [ -d "$artifact_dir" ]; then
-              php_ver=$(basename "$artifact_dir" | grep -o 'php[0-9]\.[0-9]' | sed 's/php//')
-              arch=$(basename "$artifact_dir" | grep -o 'x64$')
-              echo "Processing Windows artifact directory: $artifact_dir for PHP $php_ver ($arch)"
+              artifact_name=$(basename "$artifact_dir")
+              php_ver=$(echo "$artifact_name" | grep -o 'php[0-9]\.[0-9]' | sed 's/php//')
+              arch=$(echo "$artifact_name" | grep -o 'x64')
+              ts=$(echo "$artifact_name" | grep -o '\(ts\|nts\)$')
+              echo "Processing Windows artifact directory: $artifact_dir for PHP $php_ver ($arch-$ts)"
               for file in $(find "$artifact_dir" -name "*.dll"); do
                 echo "Found Windows build: $file"
-                cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php${php_ver}-${arch}.dll"
+                cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php${php_ver}-${arch}-${ts}.dll"
               done
             fi
           done
@@ -260,9 +262,12 @@ jobs:
             - PHP 8.4: `fastcsv-macos-php8.4.so`
 
             #### Windows:
-            - PHP 8.2 (x64): `fastcsv-windows-php8.2-x64.dll`
-            - PHP 8.3 (x64): `fastcsv-windows-php8.3-x64.dll`
-            - PHP 8.4 (x64): `fastcsv-windows-php8.4-x64.dll`
+            - PHP 8.2 (x64-TS): `fastcsv-windows-php8.2-x64-ts.dll`
+            - PHP 8.2 (x64-NTS): `fastcsv-windows-php8.2-x64-nts.dll`
+            - PHP 8.3 (x64-TS): `fastcsv-windows-php8.3-x64-ts.dll`
+            - PHP 8.3 (x64-NTS): `fastcsv-windows-php8.3-x64-nts.dll`
+            - PHP 8.4 (x64-TS): `fastcsv-windows-php8.4-x64-ts.dll`
+            - PHP 8.4 (x64-NTS): `fastcsv-windows-php8.4-x64-nts.dll`
             
             ### Installation
             1. Download the appropriate file for your platform and PHP version
