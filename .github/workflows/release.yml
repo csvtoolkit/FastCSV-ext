@@ -106,26 +106,80 @@ jobs:
           php-version: ${{ matrix.php-version }}
           arch: ${{ matrix.arch }}
           extensions: none
-          tools: phpize
           
       - name: Setup Visual Studio environment
-        uses: microsoft/setup-msbuild@v1.1
+        uses: microsoft/setup-msbuild@v2
         
-      - name: Add PHP tools to PATH
+      - name: Download PHP SDK
         shell: pwsh
         run: |
-          $phpDir = (Get-Command php).Path | Split-Path -Parent
-          $devDir = Join-Path $phpDir "dev"
-          echo "$devDir" | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "$phpDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+          Invoke-WebRequest -Uri "https://github.com/Microsoft/php-sdk-binary-tools/archive/refs/heads/master.zip" -OutFile "php-sdk.zip"
+          Expand-Archive -Path "php-sdk.zip" -DestinationPath "."
+          Rename-Item "php-sdk-binary-tools-master" "php-sdk"
+          
+      - name: Download PHP Dev Pack
+        shell: pwsh
+        run: |
+          $phpVersion = "${{ matrix.php-version }}"
+          $majorMinor = $phpVersion -replace '\.', ''
+          
+          # Get the latest patch version for the PHP major.minor version
+          $phpVersionFull = switch ($phpVersion) {
+            "8.2" { "8.2.26" }
+            "8.3" { "8.3.13" }
+            "8.4" { "8.4.0" }
+            default { $phpVersion + ".0" }
+          }
+          
+          $devPackUrl = "https://windows.php.net/downloads/releases/php-devel-pack-${phpVersionFull}-Win32-vs16-${{ matrix.arch }}.zip"
+          Write-Host "Downloading PHP Dev Pack from: $devPackUrl"
+          
+          try {
+            Invoke-WebRequest -Uri $devPackUrl -OutFile "php-devel-pack.zip"
+            Expand-Archive -Path "php-devel-pack.zip" -DestinationPath "."
+            $devPackDir = Get-ChildItem -Directory -Filter "php-${phpVersionFull}-devel-*" | Select-Object -First 1
+            if ($devPackDir) {
+              Rename-Item $devPackDir.FullName "php-dev"
+            }
+          } catch {
+            Write-Host "Failed to download dev pack, trying alternative version..."
+            # Fallback to a slightly different version format
+            $devPackUrl = "https://windows.php.net/downloads/releases/php-devel-pack-${phpVersion}.0-Win32-vs16-${{ matrix.arch }}.zip"
+            Invoke-WebRequest -Uri $devPackUrl -OutFile "php-devel-pack.zip"
+            Expand-Archive -Path "php-devel-pack.zip" -DestinationPath "."
+            $devPackDir = Get-ChildItem -Directory -Filter "php-*-devel-*" | Select-Object -First 1
+            if ($devPackDir) {
+              Rename-Item $devPackDir.FullName "php-dev"
+            }
+          }
           
       - name: Build extension
-        shell: pwsh
+        shell: cmd
         run: |
-          cd $env:GITHUB_WORKSPACE
-          phpize
-          ./configure --enable-fastcsv
+          set PHP_SDK_ROOT=%CD%\php-sdk
+          set PHP_DEV_ROOT=%CD%\php-dev
+          
+          call "%PHP_SDK_ROOT%\phpsdk-vs16-x64.bat"
+          
+          echo Current directory: %CD%
+          dir
+          
+          echo Setting up build environment...
+          set PHPRC=%PHP_DEV_ROOT%
+          set PHP_BUILD_DIR=%CD%
+          
+          echo Building extension...
+          "%PHP_DEV_ROOT%\phpize.bat"
+          if errorlevel 1 exit /b 1
+          
+          configure.bat --enable-fastcsv --with-php-build="%PHP_DEV_ROOT%"
+          if errorlevel 1 exit /b 1
+          
           nmake
+          if errorlevel 1 exit /b 1
+          
+          echo Build completed. Looking for output files:
+          dir /s *.dll | findstr fastcsv
           
       - name: Create dist directory
         run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
@@ -133,7 +187,31 @@ jobs:
       - name: Copy extension
         shell: pwsh
         run: |
-          Copy-Item "Release_TS\php_fastcsv.dll" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
+          $dllPaths = @(
+            "Release_TS\php_fastcsv.dll",
+            "x64\Release_TS\php_fastcsv.dll", 
+            "Release\php_fastcsv.dll",
+            "x64\Release\php_fastcsv.dll",
+            "modules\php_fastcsv.dll"
+          )
+          
+          $found = $false
+          foreach ($path in $dllPaths) {
+            if (Test-Path $path) {
+              Write-Host "Found extension at: $path"
+              Copy-Item "$path" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
+              $found = $true
+              break
+            }
+          }
+          
+          if (-not $found) {
+            Write-Host "ERROR: Could not find php_fastcsv.dll in any expected locations:"
+            $dllPaths | ForEach-Object { Write-Host "  Checked: $_" }
+            Write-Host "Available DLL files:"
+            Get-ChildItem -Recurse -Filter "*.dll" | Select-Object FullName
+            exit 1
+          }
           
       - name: Upload artifact
         uses: actions/upload-artifact@v4
