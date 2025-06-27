@@ -11,19 +11,6 @@ permissions:
   issues: write
 
 jobs:
-  get-extension-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.extension-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Get the extension matrix
-        id: extension-matrix
-        uses: php/php-windows-builder/extension-matrix@v1
-        with:
-          php-version-list: '8.2, 8.3, 8.4'
-
   build-linux:
     runs-on: ubuntu-latest
     strategy:
@@ -101,92 +88,14 @@ jobs:
           compression-level: 6
           overwrite: true
           include-hidden-files: false
-          
-  build-windows:
-    needs: get-extension-matrix
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix: ${{fromJson(needs.get-extension-matrix.outputs.matrix)}}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-          
-      - name: Initialize and update submodules
-        run: |
-          git submodule update --init --recursive
-          
-      - name: Verify submodule files
-        run: |
-          echo "Checking if lib directory and files exist:"
-          dir lib
-          echo "Checking specific source files:"
-          if (Test-Path "lib\arena.c") { echo "arena.c exists" } else { echo "arena.c missing" }
-          if (Test-Path "lib\csv_config.c") { echo "csv_config.c exists" } else { echo "csv_config.c missing" }
-          if (Test-Path "lib\csv_reader.c") { echo "csv_reader.c exists" } else { echo "csv_reader.c missing" }
-          if (Test-Path "lib\csv_writer.c") { echo "csv_writer.c exists" } else { echo "csv_writer.c missing" }
-          if (Test-Path "lib\csv_parser.c") { echo "csv_parser.c exists" } else { echo "csv_parser.c missing" }
-          if (Test-Path "lib\csv_utils.c") { echo "csv_utils.c exists" } else { echo "csv_utils.c missing" }
-        shell: pwsh
-          
-      - name: Build The Extension
-        uses: php/php-windows-builder/extension@v1
-        with:
-          php-version: ${{ matrix.php-version }}
-          arch: ${{ matrix.arch }}
-          ts: ${{ matrix.ts }}
-          
-      - name: Create dist directory
-        run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
-        
-      - name: Copy extension
-        shell: pwsh
-        run: |
-          $dllPaths = @(
-            "Release_TS\php_fastcsv.dll",
-            "x64\Release_TS\php_fastcsv.dll", 
-            "Release\php_fastcsv.dll",
-            "x64\Release\php_fastcsv.dll",
-            "modules\php_fastcsv.dll"
-          )
-          
-          $found = $false
-          foreach ($path in $dllPaths) {
-            if (Test-Path $path) {
-              Write-Host "Found extension at: $path"
-              Copy-Item "$path" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}/fastcsv.dll"
-              $found = $true
-              break
-            }
-          }
-          
-          if (-not $found) {
-            Write-Host "ERROR: Could not find php_fastcsv.dll in any expected locations:"
-            $dllPaths | ForEach-Object { Write-Host "  Checked: $_" }
-            Write-Host "Available DLL files:"
-            Get-ChildItem -Recurse -Filter "*.dll" | Select-Object FullName
-            exit 1
-          }
-          
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
-          path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}
-          if-no-files-found: warn
-          compression-level: 6
-          overwrite: true
-          include-hidden-files: false
 
   create-release:
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Create release directories
         run: |
-          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,windows,final}
+          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,final}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -203,8 +112,8 @@ jobs:
         run: |
           echo "=== Starting file preparation ==="
           
-          echo "Looking for .so and .dll files..."
-          find dist/releases/${{ github.ref_name }} -name "*.so" -o -name "*.dll"
+          echo "Looking for .so files..."
+          find dist/releases/${{ github.ref_name }} -name "*.so"
           
           echo "=== Processing Linux builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/linux-builds-php*; do
@@ -229,21 +138,6 @@ jobs:
               done
             fi
           done
-
-          echo "=== Processing Windows builds ==="
-          for artifact_dir in dist/releases/${{ github.ref_name }}/windows-builds-php*; do
-            if [ -d "$artifact_dir" ]; then
-              artifact_name=$(basename "$artifact_dir")
-              php_ver=$(echo "$artifact_name" | grep -o 'php[0-9]\.[0-9]' | sed 's/php//')
-              arch=$(echo "$artifact_name" | grep -o 'x64')
-              ts=$(echo "$artifact_name" | grep -o '\(ts\|nts\)$')
-              echo "Processing Windows artifact directory: $artifact_dir for PHP $php_ver ($arch-$ts)"
-              for file in $(find "$artifact_dir" -name "*.dll"); do
-                echo "Found Windows build: $file"
-                cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php${php_ver}-${arch}-${ts}.dll"
-              done
-            fi
-          done
           
           echo "=== Files ready for release ==="
           ls -la dist/releases/${{ github.ref_name }}/final/ || echo "No files in final directory"
@@ -257,7 +151,6 @@ jobs:
           files: |
             dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php*.so
             dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php*.so
-            dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php*.dll
           name: Release ${{ github.ref_name }}
           body: |
             ## FastCSV Extension ${{ github.ref_name }}
@@ -273,18 +166,10 @@ jobs:
             - PHP 8.2: `fastcsv-macos-php8.2.so`
             - PHP 8.3: `fastcsv-macos-php8.3.so`
             - PHP 8.4: `fastcsv-macos-php8.4.so`
-
-            #### Windows:
-            - PHP 8.2 (x64-TS): `fastcsv-windows-php8.2-x64-ts.dll`
-            - PHP 8.2 (x64-NTS): `fastcsv-windows-php8.2-x64-nts.dll`
-            - PHP 8.3 (x64-TS): `fastcsv-windows-php8.3-x64-ts.dll`
-            - PHP 8.3 (x64-NTS): `fastcsv-windows-php8.3-x64-nts.dll`
-            - PHP 8.4 (x64-TS): `fastcsv-windows-php8.4-x64-ts.dll`
-            - PHP 8.4 (x64-NTS): `fastcsv-windows-php8.4-x64-nts.dll`
             
             ### Installation
             1. Download the appropriate file for your platform and PHP version
-            2. Rename the downloaded file to `fastcsv.so` (Linux/macOS) or `fastcsv.dll` (Windows)
+            2. Rename the downloaded file to `fastcsv.so`
             3. Copy the renamed file to your PHP extensions directory:
                ```bash
                # Find your PHP extension directory
@@ -295,8 +180,7 @@ jobs:
                ```
             4. Add to your php.ini:
                ```ini
-               extension=fastcsv.so  # Linux/macOS
-               extension=fastcsv.dll  # Windows
+               extension=fastcsv.so
                ```
             5. Restart your PHP service/server
             

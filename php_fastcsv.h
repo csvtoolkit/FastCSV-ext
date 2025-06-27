@@ -30,7 +30,8 @@ extern zend_class_entry *fastcsv_config_ce;
 
 typedef struct _php_fastcsv_reader_object {
     CSVReader *reader;
-    Arena *arena;
+    Arena *persistent_arena;
+    Arena *temp_arena;
     zend_object std;
 } php_fastcsv_reader_object;
 

@@ -37,8 +37,12 @@ static zend_object *fastcsv_reader_create_object(zend_class_entry *class_type) {
     
     intern = zend_object_alloc(sizeof(php_fastcsv_reader_object), class_type);
     intern->reader = NULL;
-    intern->arena = emalloc(sizeof(Arena));
-    arena_create(intern->arena, 1024 * 1024);
+    
+    intern->persistent_arena = emalloc(sizeof(Arena));
+    arena_create(intern->persistent_arena, 1024 * 1024);
+    
+    intern->temp_arena = emalloc(sizeof(Arena));
+    arena_create(intern->temp_arena, 1024 * 1024);
     
     zend_object_std_init(&intern->std, class_type);
     object_properties_init(&intern->std, class_type);
@@ -88,10 +92,16 @@ static void fastcsv_reader_free_object(zend_object *object) {
         intern->reader = NULL;
     }
     
-    if (intern->arena) {
-        arena_destroy(intern->arena);
-        efree(intern->arena);
-        intern->arena = NULL;
+    if (intern->persistent_arena) {
+        arena_destroy(intern->persistent_arena);
+        efree(intern->persistent_arena);
+        intern->persistent_arena = NULL;
+    }
+    
+    if (intern->temp_arena) {
+        arena_destroy(intern->temp_arena);
+        efree(intern->temp_arena);
+        intern->temp_arena = NULL;
     }
     
     zend_object_std_dtor(&intern->std);
@@ -144,7 +154,7 @@ PHP_METHOD(FastCSVReader, __construct) {
     intern = Z_FASTCSV_READER_P(getThis());
     
     if (Z_TYPE_P(param_zval) == IS_STRING) {
-        config = csv_config_create(intern->arena);
+        config = csv_config_create(intern->persistent_arena);
         if (!config) {
             zend_throw_exception(zend_ce_exception, "Failed to create default config", 0);
             RETURN_THROWS();
@@ -152,7 +162,7 @@ PHP_METHOD(FastCSVReader, __construct) {
         
         csv_config_set_path(config, Z_STRVAL_P(param_zval));
         
-        intern->reader = csv_reader_init_with_config(intern->arena, config);
+        intern->reader = csv_reader_init_with_config(intern->persistent_arena, intern->temp_arena, config);
         if (!intern->reader) {
             zend_throw_exception(zend_ce_exception, "Failed to open CSV file", 0);
             RETURN_THROWS();
@@ -165,7 +175,7 @@ PHP_METHOD(FastCSVReader, __construct) {
             RETURN_THROWS();
         }
         
-        intern->reader = csv_reader_init_with_config(intern->arena, config_obj->config);
+        intern->reader = csv_reader_init_with_config(intern->persistent_arena, intern->temp_arena, config_obj->config);
         if (!intern->reader) {
             zend_throw_exception(zend_ce_exception, "Failed to open CSV file", 0);
             RETURN_THROWS();
@@ -288,10 +298,10 @@ PHP_METHOD(FastCSVReader, setConfig) {
     }
     
     if (intern->reader) {
-        int result = csv_reader_set_config(intern->reader, intern->arena, config_obj->config);
+        int result = csv_reader_set_config(intern->reader, intern->persistent_arena, intern->temp_arena, config_obj->config);
         RETURN_BOOL(result == 1);
     } else {
-        intern->reader = csv_reader_init_with_config(intern->arena, config_obj->config);
+        intern->reader = csv_reader_init_with_config(intern->persistent_arena, intern->temp_arena, config_obj->config);
         if (!intern->reader) {
             zend_throw_exception(zend_ce_exception, "Failed to initialize reader with config", 0);
             RETURN_THROWS();
