@@ -20,6 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -59,6 +60,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+          fetch-depth: 0
       
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -93,6 +95,38 @@ jobs:
     needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+          
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "Generating changelog for tag ${{ github.ref_name }}"
+          
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ github.ref_name }}^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previous tag found, getting all commits"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "Getting commits since $PREVIOUS_TAG"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges $PREVIOUS_TAG..${{ github.ref_name }})
+          fi
+          
+          # Escape newlines for GitHub Actions
+          CHANGELOG="${CHANGELOG//'%'/'%25'}"
+          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+          
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Changelog generated with $(echo "$CHANGELOG" | wc -l) entries"
+          
       - name: Create release directories
         run: |
           mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,final}
@@ -151,11 +185,13 @@ jobs:
           files: |
             dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php*.so
             dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php*.so
-          name: Release ${{ github.ref_name }}
+          name: FastCSV ${{ github.ref_name }}
           body: |
-            ## FastCSV Extension ${{ github.ref_name }}
+            ## 🚀 FastCSV Extension ${{ github.ref_name }}
             
-            ### Available Builds:
+            A high-performance CSV parsing extension for PHP.
+            
+            ### 📦 Available Builds
             
             #### Linux:
             - PHP 8.2: `fastcsv-linux-php8.2.so`
@@ -167,29 +203,41 @@ jobs:
             - PHP 8.3: `fastcsv-macos-php8.3.so`
             - PHP 8.4: `fastcsv-macos-php8.4.so`
             
-            ### Installation
-            1. Download the appropriate file for your platform and PHP version
-            2. Rename the downloaded file to `fastcsv.so`
-            3. Copy the renamed file to your PHP extensions directory:
+            ### 🔧 Installation
+            
+            1. **Download** the appropriate file for your platform and PHP version
+            2. **Rename** the downloaded file to `fastcsv.so`
+            3. **Copy** to your PHP extensions directory:
                ```bash
                # Find your PHP extension directory
                php -i | grep extension_dir
                
-               # Copy and rename in one command (example for Linux PHP 8.2)
+               # Copy and rename (example for Linux PHP 8.2)
                cp fastcsv-linux-php8.2.so /path/to/extension_dir/fastcsv.so
                ```
-            4. Add to your php.ini:
+            4. **Configure** your php.ini:
                ```ini
                extension=fastcsv.so
                ```
-            5. Restart your PHP service/server
+            5. **Restart** your PHP service/server
             
-            ### Verify Installation
+            ### ✅ Verify Installation
             ```bash
             # Check if the extension is loaded
             php -m | grep fastcsv
+            
+            # Test basic functionality
+            php -r "var_dump(extension_loaded('fastcsv'));"
             ```
+            
+            ### 📝 Changes in this Release
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ### 🐛 Issues & Support
+            
+            If you encounter any issues, please [open an issue](https://github.com/${{ github.repository }}/issues) on GitHub.
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
           fail_on_unmatched_files: false 
