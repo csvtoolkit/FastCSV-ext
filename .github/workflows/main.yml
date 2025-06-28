@@ -81,6 +81,60 @@ jobs:
           export SKIP_SLOW_TESTS=1
           make test
 
+  test_windows:
+    name: Windows PHP ${{ matrix.php-version }} ${{ matrix.arch }} ${{ matrix.ts }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php-version: '8.4'
+            arch: 'x86_64'
+            ts: 'nts'
+          - php-version: '8.3'
+            arch: 'x86_64'
+            ts: 'nts'
+          - php-version: '8.2'
+            arch: 'x86_64'
+            ts: 'nts'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: phpize
+
+      - name: Verify submodule files
+        run: |
+          echo "Checking if lib directory and files exist:"
+          dir lib\
+          echo "Checking specific source files:"
+          if (Test-Path "lib\arena.c") { echo "arena.c exists" } else { echo "arena.c missing" }
+          if (Test-Path "lib\csv_config.c") { echo "csv_config.c exists" } else { echo "csv_config.c missing" }
+          if (Test-Path "lib\csv_reader.c") { echo "csv_reader.c exists" } else { echo "csv_reader.c missing" }
+          if (Test-Path "lib\csv_writer.c") { echo "csv_writer.c exists" } else { echo "csv_writer.c missing" }
+          if (Test-Path "lib\csv_parser.c") { echo "csv_parser.c exists" } else { echo "csv_parser.c missing" }
+          if (Test-Path "lib\csv_utils.c") { echo "csv_utils.c exists" } else { echo "csv_utils.c missing" }
+
+      - name: Configure and build FastCSV extension
+        run: |
+          phpize
+          ./configure
+          make
+
+      - name: Run FastCSV tests
+        run: |
+          $env:NO_INTERACTION = "1"
+          $env:REPORT_EXIT_STATUS = "1"
+          $env:SKIP_SLOW_TESTS = "1"
+          make test
+
   test_all:
     name: Full PHP ${{ matrix.php }}
     needs: test_basic

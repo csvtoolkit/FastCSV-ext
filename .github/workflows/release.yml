@@ -129,7 +129,7 @@ jobs:
           
       - name: Create release directories
         run: |
-          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,final}
+          mkdir -p dist/releases/${{ github.ref_name }}/{linux,macos,windows,final}
           
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -148,6 +148,9 @@ jobs:
           
           echo "Looking for .so files..."
           find dist/releases/${{ github.ref_name }} -name "*.so"
+          
+          echo "Looking for .dll files..."
+          find dist/releases/${{ github.ref_name }} -name "*.dll"
           
           echo "=== Processing Linux builds ==="
           for artifact_dir in dist/releases/${{ github.ref_name }}/linux-builds-php*; do
@@ -173,6 +176,23 @@ jobs:
             fi
           done
           
+          echo "=== Processing Windows builds ==="
+          for artifact_dir in dist/releases/${{ github.ref_name }}/windows-builds-php*; do
+            if [ -d "$artifact_dir" ]; then
+              # Extract PHP version, architecture, and thread safety from directory name
+              dir_name=$(basename "$artifact_dir")
+              php_ver=$(echo "$dir_name" | grep -o 'php[0-9]\.[0-9]' | sed 's/php//')
+              arch=$(echo "$dir_name" | grep -o 'x86_64\|x86' | head -1)
+              ts=$(echo "$dir_name" | grep -o 'ts\|nts' | head -1)
+              
+              echo "Processing Windows artifact directory: $artifact_dir for PHP $php_ver $arch $ts"
+              for file in $(find "$artifact_dir" -name "*.dll"); do
+                echo "Found Windows build: $file"
+                cp -v "$file" "dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php${php_ver}-${arch}-${ts}.dll"
+              done
+            fi
+          done
+          
           echo "=== Files ready for release ==="
           ls -la dist/releases/${{ github.ref_name }}/final/ || echo "No files in final directory"
           
@@ -185,6 +205,7 @@ jobs:
           files: |
             dist/releases/${{ github.ref_name }}/final/fastcsv-linux-php*.so
             dist/releases/${{ github.ref_name }}/final/fastcsv-macos-php*.so
+            dist/releases/${{ github.ref_name }}/final/fastcsv-windows-php*.dll
           name: FastCSV ${{ github.ref_name }}
           body: |
             ## 🚀 FastCSV Extension ${{ github.ref_name }}
@@ -203,8 +224,17 @@ jobs:
             - PHP 8.3: `fastcsv-macos-php8.3.so`
             - PHP 8.4: `fastcsv-macos-php8.4.so`
             
+            #### Windows:
+            - PHP 8.2 x86_64 TS: `fastcsv-windows-php8.2-x86_64-ts.dll`
+            - PHP 8.2 x86_64 NTS: `fastcsv-windows-php8.2-x86_64-nts.dll`
+            - PHP 8.3 x86_64 TS: `fastcsv-windows-php8.3-x86_64-ts.dll`
+            - PHP 8.3 x86_64 NTS: `fastcsv-windows-php8.3-x86_64-nts.dll`
+            - PHP 8.4 x86_64 TS: `fastcsv-windows-php8.4-x86_64-ts.dll`
+            - PHP 8.4 x86_64 NTS: `fastcsv-windows-php8.4-x86_64-nts.dll`
+            
             ### 🔧 Installation
             
+            #### Linux/macOS:
             1. **Download** the appropriate file for your platform and PHP version
             2. **Rename** the downloaded file to `fastcsv.so`
             3. **Copy** to your PHP extensions directory:
@@ -220,6 +250,23 @@ jobs:
                extension=fastcsv.so
                ```
             5. **Restart** your PHP service/server
+            
+            #### Windows:
+            1. **Download** the appropriate DLL for your PHP version and thread safety
+            2. **Rename** the downloaded file to `php_fastcsv.dll`
+            3. **Copy** to your PHP extensions directory:
+               ```cmd
+               # Find your PHP extension directory
+               php -i | findstr extension_dir
+               
+               # Copy and rename (example for PHP 8.2 TS)
+               copy fastcsv-windows-php8.2-x86_64-ts.dll C:\path\to\ext\php_fastcsv.dll
+               ```
+            4. **Configure** your php.ini:
+               ```ini
+               extension=php_fastcsv.dll
+               ```
+            5. **Restart** your web server
             
             ### ✅ Verify Installation
             ```bash
