@@ -180,12 +180,52 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      
+      - name: Initialize submodules explicitly
+        run: |
+          echo "=== Initializing submodules ==="
+          git submodule update --init --recursive
+          echo "=== Submodule status after init ==="
+          git submodule status
+        shell: bash
+        
+      - name: Debug - Check repository structure
+        run: |
+          echo "=== Repository structure ==="
+          dir
+          echo "=== Submodule status ==="
+          git submodule status
+          echo "=== lib directory contents ==="
+          if (Test-Path "lib") { 
+            dir lib 
+            echo "=== lib source files ==="
+            dir lib\*.c -ErrorAction SilentlyContinue
+            dir lib\*.h -ErrorAction SilentlyContinue
+          } else { 
+            echo "lib directory not found!" 
+          }
+          echo "=== config files ==="
+          if (Test-Path "config.m4") { echo "config.m4 exists" } else { echo "config.m4 missing!" }
+          if (Test-Path "config.w32") { echo "config.w32 exists" } else { echo "config.w32 missing!" }
+          echo "=== Root source files ==="
+          dir *.c -ErrorAction SilentlyContinue
+          dir *.h -ErrorAction SilentlyContinue
+        shell: powershell
+        
       - name: Build the extension
         uses: php/php-windows-builder/extension@v1
         with:
           php-version: ${{ matrix.php-version }}
           arch: ${{ matrix.arch }}
           ts: ${{ matrix.ts }}
+          
+      - name: Debug - Check build output
+        run: |
+          echo "=== Build output directory ==="
+          dir -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue
+          echo "=== Current directory after build ==="
+          dir
+        shell: powershell
       - name: Create dist directory
         run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
         shell: bash

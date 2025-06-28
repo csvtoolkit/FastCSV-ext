@@ -104,6 +104,14 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Initialize submodules explicitly
+        run: |
+          echo "=== Initializing submodules ==="
+          git submodule update --init --recursive
+          echo "=== Submodule status after init ==="
+          git submodule status
+        shell: bash
+
       - name: Verify submodule files
         run: |
           echo "Checking if lib directory and files exist:"
@@ -122,7 +130,7 @@ jobs:
           php-version: ${{ matrix.php-version }}
           arch: ${{ matrix.arch }}
           ts: ${{ matrix.ts }}
-          test: true
+          run-tests: true
 
   test_all:
     name: Full PHP ${{ matrix.php }}
