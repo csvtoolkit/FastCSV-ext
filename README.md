@@ -106,13 +106,29 @@ $config->setWriteBOM(false);     // Write BOM for Unicode files (default: false)
 
 ## Installation
 
-### Prerequisites
+### Recommended: Using PIE (PHP Installer for Extensions)
 
-- PHP 8.x
+The easiest way to install FastCSV is using PIE:
+
+```bash
+# Install the latest version
+pie install csvtoolkit/fastcsv
+
+# Install a specific version
+pie install csvtoolkit/fastcsv:^0.0.1
+```
+
+For detailed PIE installation instructions, see [PIE_INSTALLATION.md](PIE_INSTALLATION.md).
+
+### Manual Installation
+
+#### Prerequisites
+
+- PHP 8.2 or higher
 - GCC or compatible C compiler
 - PHP development headers (`php-dev` package)
 
-### From Source
+#### From Source
 
 ```bash
 # Clone the repository
@@ -129,7 +145,7 @@ make
 make install
 ```
 
-### Enable Extension
+#### Enable Extension
 
 Add to your `php.ini`:
 
@@ -250,8 +266,6 @@ The extension is optimized for high-performance CSV processing with significant 
 - **Streaming Operations**: Constant memory usage regardless of file size
 - **RFC 4180 Optimized**: Fast parsing with proper quote handling
 
-
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
@@ -270,6 +284,5 @@ This project is licensed under the terms specified in the [LICENSE](LICENSE) fil
 - **Multi-line Support**: Proper handling of quoted fields spanning multiple lines
 - **Error Handling**: Improved PHP error reporting and exception handling
 - **Test Coverage**: Comprehensive test suite with extensive edge case coverage
-
 
 For the latest updates and bug reports, please check the project's issue tracker. 

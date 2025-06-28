@@ -1,0 +1,44 @@
+{
+    "name": "csvtoolkit/fastcsv",
+    "description": "High-performance PHP extension for CSV file handling with RFC 4180 compliance",
+    "type": "php-ext",
+    "license": "MIT",
+    "keywords": ["csv", "extension", "performance", "rfc4180"],
+    "homepage": "https://github.com/csvtoolkit/fastcsv",
+    "authors": [
+        {
+            "name": "Achraf AAMRI",
+            "email": "aamri.achraf@gmail.com",
+            "role": "Maintainer"
+        }
+    ],
+    "require": {
+        "php": ">=8.2.0"
+    },
+    "php-ext": {
+        "extension-name": "fastcsv",
+        "priority": 20,
+        "support-zts": true,
+        "support-nts": true,
+        "configure-options": [
+            {
+                "name": "enable-fastcsv",
+                "description": "Enable FastCSV support",
+                "needs-value": false
+            }
+        ]
+    },
+    "autoload": {
+        "files": ["stubs/fastcsv.php"]
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.0.1-dev"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "beta",
+    "prefer-stable": true
+} 
