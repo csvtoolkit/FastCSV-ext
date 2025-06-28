@@ -79,6 +79,53 @@ jobs:
           export SKIP_SLOW_TESTS=1
           make test
 
+  test_windows_basic:
+    name: Windows basic PHP 8.4
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Force submodule update to latest main
+        run: |
+          echo "=== Current submodule status ==="
+          git submodule status
+          
+          echo "=== Forcing submodule update to latest main ==="
+          git submodule update --init --recursive --remote
+          
+          echo "=== Final submodule status ==="
+          git submodule status
+          
+          echo "=== Submodule commit info ==="
+          cd lib
+          git log --oneline -5
+          cd ..
+        shell: bash
+
+      - name: Verify submodule files
+        run: |
+          echo "Checking if lib directory and files exist:"
+          dir lib\
+          echo "Checking specific source files:"
+          if (Test-Path "lib\arena.c") { echo "arena.c exists" } else { echo "arena.c missing" }
+          if (Test-Path "lib\csv_config.c") { echo "csv_config.c exists" } else { echo "csv_config.c missing" }
+          if (Test-Path "lib\csv_reader.c") { echo "csv_reader.c exists" } else { echo "csv_reader.c missing" }
+          if (Test-Path "lib\csv_writer.c") { echo "csv_writer.c exists" } else { echo "csv_writer.c missing" }
+          if (Test-Path "lib\csv_parser.c") { echo "csv_parser.c exists" } else { echo "csv_parser.c missing" }
+          if (Test-Path "lib\csv_utils.c") { echo "csv_utils.c exists" } else { echo "csv_utils.c missing" }
+
+      - name: Build and test extension (PHP 8.4 NTS x86_64)
+        uses: php/php-windows-builder/extension@v1
+        with:
+          php-version: '8.4'
+          arch: 'x86_64'
+          ts: 'nts'
+          run-tests: true
+
   get-windows-matrix:
     runs-on: ubuntu-latest
     outputs:
@@ -92,9 +139,9 @@ jobs:
         id: extension-matrix
         uses: php/php-windows-builder/extension-matrix@v1
 
-  test_windows:
+  test_windows_all:
     name: Windows PHP ${{ matrix.php-version }} ${{ matrix.arch }} ${{ matrix.ts }}
-    needs: get-windows-matrix
+    needs: [test_windows_basic, get-windows-matrix]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix: ${{fromJson(needs.get-windows-matrix.outputs.matrix)}}
@@ -103,13 +150,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      - name: Initialize submodules explicitly
+      - name: Force submodule update to latest main
         run: |
-          echo "=== Initializing submodules ==="
-          git submodule update --init --recursive
-          echo "=== Submodule status after init ==="
+          echo "=== Current submodule status ==="
           git submodule status
+          
+          echo "=== Forcing submodule update to latest main ==="
+          git submodule update --init --recursive --remote
+          
+          echo "=== Final submodule status ==="
+          git submodule status
+          
+          echo "=== Submodule commit info ==="
+          cd lib
+          git log --oneline -5
+          cd ..
         shell: bash
 
       - name: Verify submodule files

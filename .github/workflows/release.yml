@@ -180,13 +180,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
       
-      - name: Initialize submodules explicitly
+      - name: Force submodule update to latest main
         run: |
-          echo "=== Initializing submodules ==="
-          git submodule update --init --recursive
-          echo "=== Submodule status after init ==="
+          echo "=== Current submodule status ==="
           git submodule status
+          
+          echo "=== Forcing submodule update to latest main ==="
+          git submodule update --init --recursive --remote
+          
+          echo "=== Final submodule status ==="
+          git submodule status
+          
+          echo "=== Submodule commit info ==="
+          cd lib
+          git log --oneline -5
+          cd ..
         shell: bash
         
       - name: Debug - Check repository structure

@@ -1,6 +1,6 @@
 ARG_ENABLE("fastcsv", "enable FastCSV support", "no");
 
 if (PHP_FASTCSV != "no") {
-	EXTENSION("fastcsv", "fastcsv.c lib/arena.c lib/csv_config.c lib/csv_reader.c lib/csv_writer.c lib/csv_parser.c lib/csv_utils.c");
+	EXTENSION("fastcsv", "fastcsv.c lib\\arena.c lib\\csv_config.c lib\\csv_reader.c lib\\csv_writer.c lib\\csv_parser.c lib\\csv_utils.c");
 	AC_DEFINE('HAVE_FASTCSV', 1, 'Have FastCSV support');
 } 
