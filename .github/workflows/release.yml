@@ -222,14 +222,13 @@ jobs:
           dir *.h -ErrorAction SilentlyContinue
         shell: powershell
         
-      - name: Copy lib files to root for Windows build
+      - name: Prepare extension with lib files
         run: |
-          echo "=== Copying lib files to root directory ==="
+          echo "=== Copying lib files to extension root ==="
           if (Test-Path "lib") {
-            echo "lib directory found, copying files..."
-            Copy-Item -Path "lib\*.c" -Destination "." -Force
-            Copy-Item -Path "lib\*.h" -Destination "." -Force
-            echo "Files copied. Root directory now contains:"
+            echo "Copying all lib files to root directory..."
+            Copy-Item -Path "lib\*" -Destination "." -Recurse -Force
+            echo "Files copied. Extension directory now contains:"
             dir *.c
             dir *.h
           } else {

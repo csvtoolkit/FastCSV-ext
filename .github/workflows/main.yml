@@ -106,20 +106,20 @@ jobs:
           cd ..
         shell: bash
 
-      - name: Copy lib files to root for Windows build
+      - name: Prepare extension with lib files
         run: |
-          echo "=== Copying lib files to root directory ==="
+          echo "=== Copying lib files to extension root ==="
           if (Test-Path "lib") {
-            echo "lib directory found, copying files..."
-            Copy-Item -Path "lib\*.c" -Destination "." -Force
-            Copy-Item -Path "lib\*.h" -Destination "." -Force
-            echo "Files copied. Root directory now contains:"
+            echo "Copying all lib files to root directory..."
+            Copy-Item -Path "lib\*" -Destination "." -Recurse -Force
+            echo "Files copied. Extension directory now contains:"
             dir *.c
             dir *.h
           } else {
             echo "ERROR: lib directory not found!"
             exit 1
           }
+        shell: powershell
 
       - name: Build and test extension (PHP 8.4 NTS x64)
         uses: php/php-windows-builder/extension@v1
@@ -172,20 +172,20 @@ jobs:
           cd ..
         shell: bash
 
-      - name: Copy lib files to root for Windows build
+      - name: Prepare extension with lib files
         run: |
-          echo "=== Copying lib files to root directory ==="
+          echo "=== Copying lib files to extension root ==="
           if (Test-Path "lib") {
-            echo "lib directory found, copying files..."
-            Copy-Item -Path "lib\*.c" -Destination "." -Force
-            Copy-Item -Path "lib\*.h" -Destination "." -Force
-            echo "Files copied. Root directory now contains:"
+            echo "Copying all lib files to root directory..."
+            Copy-Item -Path "lib\*" -Destination "." -Recurse -Force
+            echo "Files copied. Extension directory now contains:"
             dir *.c
             dir *.h
           } else {
             echo "ERROR: lib directory not found!"
             exit 1
           }
+        shell: powershell
 
       - name: Build and test extension
         uses: php/php-windows-builder/extension@v1
