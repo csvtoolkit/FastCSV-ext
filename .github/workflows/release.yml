@@ -226,7 +226,7 @@ jobs:
         uses: php/php-windows-builder/extension@v1
         with:
           php-version: ${{ matrix.php-version }}
-          arch: ${{ matrix.arch }}
+          arch: ${{ matrix.arch == 'x86_64' && 'x64' || matrix.arch }}
           ts: ${{ matrix.ts }}
           
       - name: Debug - Check build output

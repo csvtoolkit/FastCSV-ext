@@ -118,11 +118,11 @@ jobs:
           if (Test-Path "lib\csv_parser.c") { echo "csv_parser.c exists" } else { echo "csv_parser.c missing" }
           if (Test-Path "lib\csv_utils.c") { echo "csv_utils.c exists" } else { echo "csv_utils.c missing" }
 
-      - name: Build and test extension (PHP 8.4 NTS x86_64)
+      - name: Build and test extension (PHP 8.4 NTS x64)
         uses: php/php-windows-builder/extension@v1
         with:
           php-version: '8.4'
-          arch: 'x86_64'
+          arch: 'x64'
           ts: 'nts'
           run-tests: true
 
@@ -185,7 +185,7 @@ jobs:
         uses: php/php-windows-builder/extension@v1
         with:
           php-version: ${{ matrix.php-version }}
-          arch: ${{ matrix.arch }}
+          arch: ${{ matrix.arch == 'x86_64' && 'x64' || matrix.arch }}
           ts: ${{ matrix.ts }}
           run-tests: true
 
