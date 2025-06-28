@@ -222,19 +222,38 @@ jobs:
           dir *.h -ErrorAction SilentlyContinue
         shell: powershell
         
+      - name: Copy lib files to root for Windows build
+        run: |
+          echo "=== Copying lib files to root directory ==="
+          if (Test-Path "lib") {
+            echo "lib directory found, copying files..."
+            Copy-Item -Path "lib\*.c" -Destination "." -Force
+            Copy-Item -Path "lib\*.h" -Destination "." -Force
+            echo "Files copied. Root directory now contains:"
+            dir *.c
+            dir *.h
+          } else {
+            echo "ERROR: lib directory not found!"
+            exit 1
+          }
+        shell: powershell
+        
       - name: Build the extension
         uses: php/php-windows-builder/extension@v1
         with:
           php-version: ${{ matrix.php-version }}
           arch: ${{ matrix.arch == 'x86_64' && 'x64' || matrix.arch }}
           ts: ${{ matrix.ts }}
-          
+        
       - name: Debug - Check build output
         run: |
           echo "=== Build output directory ==="
           dir -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue
           echo "=== Current directory after build ==="
           dir
+          echo "=== Check if lib directory exists after build ==="
+          if (Test-Path "lib") { echo "lib directory exists"; dir lib } else { echo "lib directory missing after build" }
+          if (Test-Path "lib-backup") { echo "lib-backup directory exists"; dir lib-backup } else { echo "lib-backup directory missing" }
         shell: powershell
       - name: Create dist directory
         run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
