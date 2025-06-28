@@ -34,6 +34,39 @@ jobs:
           ./configure
           make
           
+      - name: Validate extension
+        run: |
+          echo "=== Validating FastCSV extension ==="
+          
+          # Test if extension loads
+          php -m | grep fastcsv || (echo "Extension not loaded!" && exit 1)
+          
+          # Test basic functionality
+          php -r "
+            if (!extension_loaded('fastcsv')) {
+              echo 'Extension not loaded!' . PHP_EOL;
+              exit(1);
+            }
+            echo 'FastCSV extension loaded successfully' . PHP_EOL;
+            
+            // Test if classes are available
+            if (class_exists('FastCSVReader')) {
+              echo 'FastCSVReader class available' . PHP_EOL;
+            } else {
+              echo 'FastCSVReader class not found!' . PHP_EOL;
+              exit(1);
+            }
+            
+            if (class_exists('FastCSVWriter')) {
+              echo 'FastCSVWriter class available' . PHP_EOL;
+            } else {
+              echo 'FastCSVWriter class not found!' . PHP_EOL;
+              exit(1);
+            }
+          "
+          
+          echo "=== Extension validation passed ==="
+          
       - name: Create dist directory
         run: mkdir -p dist/releases/${{ github.ref_name }}/linux/php${{ matrix.php-version }}
         
@@ -74,6 +107,39 @@ jobs:
           ./configure
           make
           
+      - name: Validate extension
+        run: |
+          echo "=== Validating FastCSV extension ==="
+          
+          # Test if extension loads
+          php -m | grep fastcsv || (echo "Extension not loaded!" && exit 1)
+          
+          # Test basic functionality
+          php -r "
+            if (!extension_loaded('fastcsv')) {
+              echo 'Extension not loaded!' . PHP_EOL;
+              exit(1);
+            }
+            echo 'FastCSV extension loaded successfully' . PHP_EOL;
+            
+            // Test if classes are available
+            if (class_exists('FastCSVReader')) {
+              echo 'FastCSVReader class available' . PHP_EOL;
+            } else {
+              echo 'FastCSVReader class not found!' . PHP_EOL;
+              exit(1);
+            }
+            
+            if (class_exists('FastCSVWriter')) {
+              echo 'FastCSVWriter class available' . PHP_EOL;
+            } else {
+              echo 'FastCSVWriter class not found!' . PHP_EOL;
+              exit(1);
+            }
+          "
+          
+          echo "=== Extension validation passed ==="
+          
       - name: Create dist directory
         run: mkdir -p dist/releases/${{ github.ref_name }}/macos/php${{ matrix.php-version }}
         
@@ -91,8 +157,209 @@ jobs:
           overwrite: true
           include-hidden-files: false
 
+  get-extension-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.extension-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Get the extension matrix
+        id: extension-matrix
+        uses: php/php-windows-builder/extension-matrix@v1
+
+  build-windows:
+    needs: get-extension-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{fromJson(needs.get-extension-matrix.outputs.matrix)}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build the extension
+        uses: php/php-windows-builder/extension@v1
+        with:
+          php-version: ${{ matrix.php-version }}
+          arch: ${{ matrix.arch }}
+          ts: ${{ matrix.ts }}
+      - name: Create dist directory
+        run: mkdir -p dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
+        shell: bash
+      - name: Copy Windows DLL
+        run: |
+          # Find the built DLL (the PHP Windows builder creates it with a specific naming pattern)
+          if [ -f "php_fastcsv.dll" ]; then
+            cp "php_fastcsv.dll" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}/php_fastcsv.dll"
+          elif [ -f "php_fastcsv-${{ matrix.php-version }}-${{ matrix.ts }}-vs16-${{ matrix.arch }}.dll" ]; then
+            cp "php_fastcsv-${{ matrix.php-version }}-${{ matrix.ts }}-vs16-${{ matrix.arch }}.dll" "dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}/php_fastcsv.dll"
+          else
+            echo "Looking for any DLL files..."
+            find . -name "*.dll" -type f
+            echo "ERROR: Could not find the built DLL file!"
+            exit 1
+          fi
+        shell: bash
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds-php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
+          path: dist/releases/${{ github.ref_name }}/windows/php${{ matrix.php-version }}-${{ matrix.arch }}-${{ matrix.ts }}
+          if-no-files-found: warn
+          compression-level: 6
+          overwrite: true
+          include-hidden-files: false
+
+  validate-release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+          
+      - name: Setup PHP for validation
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: phpize
+          
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/releases/${{ github.ref_name }}
+          
+      - name: Validate Linux builds
+        run: |
+          echo "=== Validating Linux builds ==="
+          
+          # Find and validate Linux .so files
+          for so_file in dist/releases/${{ github.ref_name }}/linux-builds-php*/fastcsv.so; do
+            if [ -f "$so_file" ]; then
+              echo "Validating: $so_file"
+              
+              # Check file properties
+              ls -la "$so_file"
+              file "$so_file"
+              
+              # Test if it's a valid shared object
+              if ! file "$so_file" | grep -q "shared object"; then
+                echo "ERROR: $so_file is not a valid shared object!"
+                exit 1
+              fi
+              
+              echo "✓ $so_file is valid"
+            fi
+          done
+          
+      - name: Validate macOS builds
+        run: |
+          echo "=== Validating macOS builds ==="
+          
+          # Find and validate macOS .so files
+          for so_file in dist/releases/${{ github.ref_name }}/macos-builds-php*/fastcsv.so; do
+            if [ -f "$so_file" ]; then
+              echo "Validating: $so_file"
+              
+              # Check file properties
+              ls -la "$so_file"
+              file "$so_file"
+              
+              # Test if it's a valid shared object
+              if ! file "$so_file" | grep -q "shared object\|Mach-O"; then
+                echo "ERROR: $so_file is not a valid shared object!"
+                exit 1
+              fi
+              
+              echo "✓ $so_file is valid"
+            fi
+          done
+          
+      - name: Validate Windows builds
+        run: |
+          echo "=== Validating Windows builds ==="
+          
+          # Find and validate Windows .dll files
+          for dll_file in dist/releases/${{ github.ref_name }}/windows-builds-php*/php_fastcsv.dll; do
+            if [ -f "$dll_file" ]; then
+              echo "Validating: $dll_file"
+              
+              # Check file properties
+              ls -la "$dll_file"
+              file "$dll_file"
+              
+              # Test if it's a valid DLL
+              if ! file "$dll_file" | grep -q "PE32\|executable"; then
+                echo "ERROR: $dll_file is not a valid Windows DLL!"
+                exit 1
+              fi
+              
+              echo "✓ $dll_file is valid"
+            fi
+          done
+          
+      - name: Run basic tests
+        run: |
+          echo "=== Running basic functionality tests ==="
+          
+          # Create a temporary test file
+          cat > test_fastcsv.php << 'EOF'
+          <?php
+          if (!extension_loaded('fastcsv')) {
+            echo "ERROR: FastCSV extension not loaded!\n";
+            exit(1);
+          }
+          
+          echo "✓ FastCSV extension loaded\n";
+          
+          if (!class_exists('FastCSVReader')) {
+            echo "ERROR: FastCSVReader class not found!\n";
+            exit(1);
+          }
+          
+          echo "✓ FastCSVReader class available\n";
+          
+          if (!class_exists('FastCSVWriter')) {
+            echo "ERROR: FastCSVWriter class not found!\n";
+            exit(1);
+          }
+          
+          echo "✓ FastCSVWriter class available\n";
+          
+          // Test basic CSV operations
+          try {
+            $csv_data = "name,age,city\nJohn,25,New York\nJane,30,London";
+            $temp_file = tempnam(sys_get_temp_dir(), 'test_csv');
+            file_put_contents($temp_file, $csv_data);
+            
+            $reader = new FastCSVReader($temp_file);
+            $row = $reader->read();
+            
+            if ($row && is_array($row) && count($row) === 3) {
+              echo "✓ Basic CSV reading works\n";
+            } else {
+              echo "ERROR: Basic CSV reading failed!\n";
+              exit(1);
+            }
+            
+            unlink($temp_file);
+            echo "✓ All basic tests passed\n";
+            
+          } catch (Exception $e) {
+            echo "ERROR: Exception during testing: " . $e->getMessage() . "\n";
+            exit(1);
+          }
+          EOF
+          
+          # Run the test with PHP 8.2
+          php test_fastcsv.php
+
   create-release:
-    needs: [build-linux, build-macos]
+    needs: [validate-release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

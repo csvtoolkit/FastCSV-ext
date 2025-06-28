@@ -4,8 +4,6 @@ on:
   push:
   pull_request:
     types: [opened, synchronize, reopened]
-  release:
-    types: [created]
 
 jobs:
   test_basic:
@@ -81,34 +79,30 @@ jobs:
           export SKIP_SLOW_TESTS=1
           make test
 
+  get-windows-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.extension-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Get the extension matrix
+        id: extension-matrix
+        uses: php/php-windows-builder/extension-matrix@v1
+
   test_windows:
     name: Windows PHP ${{ matrix.php-version }} ${{ matrix.arch }} ${{ matrix.ts }}
+    needs: get-windows-matrix
+    runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - php-version: '8.4'
-            arch: 'x86_64'
-            ts: 'nts'
-          - php-version: '8.3'
-            arch: 'x86_64'
-            ts: 'nts'
-          - php-version: '8.2'
-            arch: 'x86_64'
-            ts: 'nts'
-    runs-on: windows-latest
-
+      matrix: ${{fromJson(needs.get-windows-matrix.outputs.matrix)}}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php-version }}
-          tools: phpize
 
       - name: Verify submodule files
         run: |
@@ -122,18 +116,13 @@ jobs:
           if (Test-Path "lib\csv_parser.c") { echo "csv_parser.c exists" } else { echo "csv_parser.c missing" }
           if (Test-Path "lib\csv_utils.c") { echo "csv_utils.c exists" } else { echo "csv_utils.c missing" }
 
-      - name: Configure and build FastCSV extension
-        run: |
-          phpize
-          ./configure
-          make
-
-      - name: Run FastCSV tests
-        run: |
-          $env:NO_INTERACTION = "1"
-          $env:REPORT_EXIT_STATUS = "1"
-          $env:SKIP_SLOW_TESTS = "1"
-          make test
+      - name: Build and test extension
+        uses: php/php-windows-builder/extension@v1
+        with:
+          php-version: ${{ matrix.php-version }}
+          arch: ${{ matrix.arch }}
+          ts: ${{ matrix.ts }}
+          test: true
 
   test_all:
     name: Full PHP ${{ matrix.php }}
